@@ -5,8 +5,8 @@ CopyQR v1 is a small, native macOS menu-bar utility for moving selected text fro
 ## Main workflow
 
 1. Select text in any macOS application.
-2. Press **Shift-Command-K**, or use **Services → Show Selection as QR** from the context menu.
-3. macOS passes the selection to CopyQR through its native Services system; Accessibility permission is not required.
+2. Press **Control-Q**.
+3. CopyQR reads the active selection using the one-time macOS Accessibility permission.
 4. CopyQR detects whether it is a web link or ordinary text.
 5. Web links are encoded directly. Ordinary text is Base64URL-encoded inside the fragment of the CopyQR receiver URL.
 6. Scan the QR code using a phone camera. For ordinary text, tap **Copy text** on the receiver page.
@@ -14,9 +14,8 @@ CopyQR v1 is a small, native macOS menu-bar utility for moving selected text fro
 ## Included functionality
 
 - Runs as a menu-bar utility without a Dock icon.
-- Receives selected text through the native macOS Services system.
-- Provides **Shift-Command-K** as the service shortcut.
-- Adds **Show Selection as QR** to the Services/right-click menu.
+- Registers **Control-Q** as a global shortcut.
+- Reads selected text directly through macOS Accessibility APIs without replacing the clipboard.
 - Includes a clipboard-based fallback for applications that do not support text Services.
 - Generates QR codes locally with Apple's Core Image framework.
 - Keeps the QR window above ordinary windows and available across Spaces.
@@ -30,7 +29,7 @@ CopyQR v1 is a small, native macOS menu-bar utility for moving selected text fro
 
 ## Permissions
 
-CopyQR does not require Accessibility permission. The foreground application provides selected text through the user-invoked macOS Services system.
+CopyQR requires Accessibility permission to read the active selection when **Control-Q** is pressed. macOS prompts for this permission once for the installed build. Because the free public build is ad-hoc signed, macOS may request permission again after replacing the app with a newly built update.
 
 ## Current v1 limitations
 

@@ -7,11 +7,11 @@ See [FUNCTIONALITY.md](FUNCTIONALITY.md) for the complete v1 feature set, permis
 ## Use
 
 1. Open `dist/CopyQR.app`.
-2. Select text in any app.
-3. Press **Shift-Command-K**, or right-click and choose **Services → Show Selection as QR**.
+2. Press **Control-Q** once and allow CopyQR under **System Settings → Privacy & Security → Accessibility**.
+3. Select text in any app and press **Control-Q**.
 4. Scan the QR code with your phone. For ordinary text, tap **Copy text** on the receiver page.
 
-CopyQR uses the native macOS Services system and does not require Accessibility permission. You can also copy text normally, click the QR icon in the macOS menu bar, and choose **Show Clipboard as QR**.
+Accessibility permission lets CopyQR read the text you actively select when its global shortcut is pressed. You can also copy text normally, click the QR icon in the macOS menu bar, and choose **Show Clipboard as QR**.
 
 CopyQR has no analytics and never uploads selected text. Ordinary text is encoded after `#` in the receiver URL; URL fragments are not sent in HTTP requests. The static receiver contains no accounts, storage, cookies, or third-party scripts.
 

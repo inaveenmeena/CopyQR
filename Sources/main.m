@@ -1,7 +1,11 @@
 #import <AppKit/AppKit.h>
+#import <ApplicationServices/ApplicationServices.h>
+#import <Carbon/Carbon.h>
 #import <CoreImage/CoreImage.h>
 
 static NSString *const CopyQRReceiverURL = @"https://inaveenmeena.github.io/CopyQR/";
+static const OSType CopyQRHotKeySignature = 'CQR!';
+static const UInt32 CopyQRHotKeyID = 1;
 
 @interface QRPanelController : NSWindowController <NSWindowDelegate>
 @property (nonatomic, copy) void (^onClose)(void);
@@ -11,17 +15,29 @@ static NSString *const CopyQRReceiverURL = @"https://inaveenmeena.github.io/Copy
 @interface AppDelegate : NSObject <NSApplicationDelegate>
 @property (nonatomic, strong) NSStatusItem *statusItem;
 @property (nonatomic, strong) QRPanelController *panel;
+@property (nonatomic) EventHotKeyRef hotKeyRef;
+@property (nonatomic) EventHandlerRef eventHandler;
 - (void)showClipboardAsQR;
-- (void)showSelectionAsQR:(NSPasteboard *)pasteboard userData:(NSString *)userData error:(NSString **)error;
+- (void)captureSelectionAndShowQR;
 @end
+
+static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, void *userData) {
+    EventHotKeyID pressed = {0};
+    OSStatus status = GetEventParameter(event, kEventParamDirectObject, typeEventHotKeyID,
+                                        NULL, sizeof(pressed), NULL, &pressed);
+    if (status == noErr && pressed.signature == CopyQRHotKeySignature && pressed.id == CopyQRHotKeyID) {
+        AppDelegate *delegate = (__bridge AppDelegate *)userData;
+        dispatch_async(dispatch_get_main_queue(), ^{ [delegate captureSelectionAndShowQR]; });
+    }
+    return noErr;
+}
 
 @implementation AppDelegate
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [self configureStatusItem];
-    [NSApp setServicesProvider:self];
-    NSUpdateDynamicServices();
+    [self registerHotKey];
 }
 
 - (void)configureStatusItem {
@@ -36,7 +52,7 @@ static NSString *const CopyQRReceiverURL = @"https://inaveenmeena.github.io/Copy
     show.target = self;
     [menu addItem:show];
     [menu addItem:[NSMenuItem separatorItem]];
-    NSMenuItem *shortcut = [[NSMenuItem alloc] initWithTitle:@"Shortcut: ⇧⌘K" action:nil keyEquivalent:@""];
+    NSMenuItem *shortcut = [[NSMenuItem alloc] initWithTitle:@"Shortcut: ⌃Q" action:nil keyEquivalent:@""];
     shortcut.enabled = NO;
     [menu addItem:shortcut];
     [menu addItem:[NSMenuItem separatorItem]];
@@ -46,13 +62,50 @@ static NSString *const CopyQRReceiverURL = @"https://inaveenmeena.github.io/Copy
     self.statusItem.menu = menu;
 }
 
-- (void)showSelectionAsQR:(NSPasteboard *)pasteboard userData:(NSString *)userData error:(NSString **)error {
-    NSString *text = [pasteboard stringForType:NSPasteboardTypeString];
-    if (text.length == 0) {
-        if (error) *error = @"CopyQR couldn’t read the selected text.";
+- (void)registerHotKey {
+    EventTypeSpec type = { kEventClassKeyboard, kEventHotKeyPressed };
+    InstallEventHandler(GetApplicationEventTarget(), CopyQRHotKeyHandler, 1, &type,
+                        (__bridge void *)self, &_eventHandler);
+    EventHotKeyID identifier = { CopyQRHotKeySignature, CopyQRHotKeyID };
+    OSStatus status = RegisterEventHotKey(kVK_ANSI_Q, controlKey, identifier,
+                                          GetApplicationEventTarget(), 0, &_hotKeyRef);
+    if (status != noErr) {
+        [self showAlert:@"Shortcut unavailable"
+                message:@"CopyQR couldn’t register ⌃Q because another app is already using it."];
+    }
+}
+
+- (void)captureSelectionAndShowQR {
+    NSDictionary *options = @{(__bridge NSString *)kAXTrustedCheckOptionPrompt: @YES};
+    if (!AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)options)) {
+        [self showAlert:@"Allow Accessibility access"
+                message:@"Enable CopyQR in System Settings → Privacy & Security → Accessibility, then press ⌃Q again."];
         return;
     }
-    dispatch_async(dispatch_get_main_queue(), ^{ [self showTextAsQR:text]; });
+
+    AXUIElementRef system = AXUIElementCreateSystemWide();
+    CFTypeRef focused = NULL;
+    AXError focusedError = AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute, &focused);
+    CFRelease(system);
+
+    CFTypeRef selected = NULL;
+    AXError selectedError = focusedError == kAXErrorSuccess && focused
+        ? AXUIElementCopyAttributeValue((AXUIElementRef)focused, kAXSelectedTextAttribute, &selected)
+        : kAXErrorFailure;
+    if (focused) CFRelease(focused);
+
+    NSString *text = nil;
+    if (selectedError == kAXErrorSuccess && selected && CFGetTypeID(selected) == CFStringGetTypeID()) {
+        text = [(__bridge NSString *)selected copy];
+    }
+    if (selected) CFRelease(selected);
+
+    if (text.length == 0) {
+        [self showAlert:@"No text selected"
+                message:@"Select some text, then press ⌃Q. If an app doesn’t expose its selection to macOS, use CopyQR’s clipboard menu option."];
+        return;
+    }
+    [self showTextAsQR:text];
 }
 
 - (NSImage *)qrImageForData:(NSData *)data {
@@ -139,6 +192,11 @@ static NSString *const CopyQRReceiverURL = @"https://inaveenmeena.github.io/Copy
 }
 
 - (void)quitApp { [NSApp terminate:nil]; }
+
+- (void)applicationWillTerminate:(NSNotification *)notification {
+    if (self.hotKeyRef) UnregisterEventHotKey(self.hotKeyRef);
+    if (self.eventHandler) RemoveEventHandler(self.eventHandler);
+}
 
 @end
 

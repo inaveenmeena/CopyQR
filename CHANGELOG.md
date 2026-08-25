@@ -2,10 +2,10 @@
 
 ## 1.0.2
 
-- Replace Accessibility-based selection capture with a native macOS Service.
-- Use Shift-Command-K as the service keyboard shortcut, avoiding macOS's reserved Log Out shortcut and common browser refresh shortcuts.
-- Add **Show Selection as QR** to the macOS Services/right-click menu.
-- Stop requesting Accessibility permission across app updates.
+- Restore the global shortcut and Accessibility-based selection capture from v1.0.0.
+- Use the short, Q-based **Control-Q** global shortcut.
+- Remove the extra macOS Services enablement step.
+- Read the active selection directly without changing the clipboard.
 - Update the receiver and repository identity from `inaveengehlot` to `inaveenmeena`.
 - Add a **Designed by Naveen Meena · @inaveenmeena** credit to the receiver.
 - Document the exact single-QR text capacity.

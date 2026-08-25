@@ -26,28 +26,5 @@
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
-    <key>NSServices</key>
-    <array>
-        <dict>
-            <key>NSKeyEquivalent</key>
-            <dict>
-                <key>default</key>
-                <string>K</string>
-            </dict>
-            <key>NSMenuItem</key>
-            <dict>
-                <key>default</key>
-                <string>Show Selection as QR</string>
-            </dict>
-            <key>NSMessage</key>
-            <string>showSelectionAsQR</string>
-            <key>NSPortName</key>
-            <string>CopyQR</string>
-            <key>NSSendTypes</key>
-            <array>
-                <string>public.utf8-plain-text</string>
-            </array>
-        </dict>
-    </array>
 </dict>
 </plist>
