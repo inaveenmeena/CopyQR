@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.3 selection hotfix
+
+- Remember the last active non-CopyQR application so opening the QR panel cannot make CopyQR read its own (empty) selection.
+- Re-check the foreground application at the instant the global shortcut fires, with the system-wide Accessibility lookup retained as a fallback.
+- Keep shortcut capture completely independent of the macOS clipboard.
+
 ## 1.0.3
 
 - Replace version-specific ad-hoc signing with a stable private CopyQR release identity so Accessibility approval can persist across updates.

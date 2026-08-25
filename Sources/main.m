@@ -23,8 +23,10 @@ static const UInt32 CopyQRHotKeyID = 1;
 @property (nonatomic, strong) NSMenuItem *launchItem;
 @property (nonatomic) EventHotKeyRef hotKeyRef;
 @property (nonatomic) EventHandlerRef eventHandler;
+@property (nonatomic) pid_t lastExternalApplicationPID;
 - (void)showClipboardAsQR;
 - (void)captureSelectionAndShowQR;
+- (void)updateLastExternalApplication:(NSRunningApplication *)application;
 @end
 
 static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, void *userData) {
@@ -33,6 +35,7 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
                                         NULL, sizeof(pressed), NULL, &pressed);
     if (status == noErr && pressed.signature == CopyQRHotKeySignature && pressed.id == CopyQRHotKeyID) {
         AppDelegate *delegate = (__bridge AppDelegate *)userData;
+        [delegate updateLastExternalApplication:NSWorkspace.sharedWorkspace.frontmostApplication];
         dispatch_async(dispatch_get_main_queue(), ^{ [delegate captureSelectionAndShowQR]; });
     }
     return noErr;
@@ -43,7 +46,21 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [self configureStatusItem];
+    [self updateLastExternalApplication:NSWorkspace.sharedWorkspace.frontmostApplication];
+    [NSWorkspace.sharedWorkspace.notificationCenter addObserver:self
+                                                       selector:@selector(workspaceApplicationActivated:)
+                                                           name:NSWorkspaceDidActivateApplicationNotification
+                                                         object:nil];
     [self registerHotKey];
+}
+
+- (void)workspaceApplicationActivated:(NSNotification *)notification {
+    [self updateLastExternalApplication:notification.userInfo[NSWorkspaceApplicationKey]];
+}
+
+- (void)updateLastExternalApplication:(NSRunningApplication *)application {
+    if (!application || application.processIdentifier == NSProcessInfo.processInfo.processIdentifier) return;
+    self.lastExternalApplicationPID = application.processIdentifier;
 }
 
 - (void)configureStatusItem {
@@ -110,16 +127,27 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
 
 - (void)captureSelectionAndShowQR {
     NSDictionary *options = @{(__bridge NSString *)kAXTrustedCheckOptionPrompt: @YES};
-    if (!AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)options)) {
+    BOOL trusted = AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)options);
+    if (!trusted) {
         [self showAccessibilityHelp];
         return;
     }
 
-    AXUIElementRef system = AXUIElementCreateSystemWide();
     CFTypeRef focused = NULL;
-    AXError focusedError = AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute, &focused);
-    CFRelease(system);
-
+    AXError focusedError = kAXErrorInvalidUIElement;
+    AXUIElementRef sourceApplication = self.lastExternalApplicationPID > 0
+        ? AXUIElementCreateApplication(self.lastExternalApplicationPID)
+        : NULL;
+    if (sourceApplication) {
+        focusedError = AXUIElementCopyAttributeValue(sourceApplication, kAXFocusedUIElementAttribute, &focused);
+        CFRelease(sourceApplication);
+    }
+    if (focusedError != kAXErrorSuccess || !focused) {
+        if (focused) { CFRelease(focused); focused = NULL; }
+        AXUIElementRef system = AXUIElementCreateSystemWide();
+        focusedError = AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute, &focused);
+        CFRelease(system);
+    }
     CFTypeRef selected = NULL;
     AXError selectedError = focusedError == kAXErrorSuccess && focused
         ? AXUIElementCopyAttributeValue((AXUIElementRef)focused, kAXSelectedTextAttribute, &selected)
