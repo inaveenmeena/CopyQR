@@ -5,10 +5,11 @@
 
 static const OSType CopyQRHotKeySignature = 'CQR!';
 static const UInt32 CopyQRHotKeyID = 1;
+static NSString *const CopyQRReceiverURL = @"https://inaveengehlot.github.io/CopyQR/";
 
 @interface QRPanelController : NSWindowController <NSWindowDelegate>
 @property (nonatomic, copy) void (^onClose)(void);
-- (instancetype)initWithImage:(NSImage *)image byteCount:(NSUInteger)byteCount;
+- (instancetype)initWithImage:(NSImage *)image byteCount:(NSUInteger)byteCount title:(NSString *)title;
 @end
 
 @interface AppDelegate : NSObject <NSApplicationDelegate>
@@ -131,11 +132,27 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
 }
 
 - (void)showTextAsQR:(NSString *)text {
+    NSString *trimmed = [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    NSURLComponents *components = [NSURLComponents componentsWithString:trimmed];
+    NSString *scheme = components.scheme.lowercaseString;
+    BOOL isWebLink = ([scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"]) && components.host.length > 0;
 
-    NSData *payload = [text dataUsingEncoding:NSUTF8StringEncoding];
+    NSString *qrContent;
+    if (isWebLink) {
+        qrContent = trimmed;
+    } else {
+        NSData *textData = [text dataUsingEncoding:NSUTF8StringEncoding];
+        NSString *encoded = [textData base64EncodedStringWithOptions:0];
+        encoded = [[encoded stringByReplacingOccurrencesOfString:@"+" withString:@"-"]
+                   stringByReplacingOccurrencesOfString:@"/" withString:@"_"];
+        encoded = [encoded stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"="]];
+        qrContent = [NSString stringWithFormat:@"%@#v1.%@", CopyQRReceiverURL, encoded];
+    }
+
+    NSData *payload = [qrContent dataUsingEncoding:NSUTF8StringEncoding];
     if (payload.length > 2900) {
         [self showAlert:@"Text is too large"
-                message:[NSString stringWithFormat:@"This version supports up to 2,900 UTF-8 bytes in one QR. Your clipboard contains %lu bytes.", (unsigned long)payload.length]];
+                message:[NSString stringWithFormat:@"This text needs %lu QR bytes after secure URL encoding. CopyQR v1.0.1 supports up to 2,900. Try a shorter selection.", (unsigned long)payload.length]];
         return;
     }
 
@@ -146,7 +163,9 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
     }
 
     [self.panel close];
-    QRPanelController *controller = [[QRPanelController alloc] initWithImage:image byteCount:payload.length];
+    QRPanelController *controller = [[QRPanelController alloc] initWithImage:image
+                                                                   byteCount:[text dataUsingEncoding:NSUTF8StringEncoding].length
+                                                                       title:isWebLink ? @"Scan to open" : @"Scan to copy"];
     self.panel = controller;
     __weak typeof(self) weakSelf = self;
     __weak QRPanelController *weakController = controller;
@@ -178,7 +197,7 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
 
 @implementation QRPanelController
 
-- (instancetype)initWithImage:(NSImage *)image byteCount:(NSUInteger)byteCount {
+- (instancetype)initWithImage:(NSImage *)image byteCount:(NSUInteger)byteCount title:(NSString *)titleText {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 620, 680)
                                                   styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskFullSizeContentView
                                                     backing:NSBackingStoreBuffered
@@ -193,12 +212,12 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
         window.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary;
         window.delegate = self;
         [window center];
-        [self buildContentWithImage:image byteCount:byteCount];
+        [self buildContentWithImage:image byteCount:byteCount title:titleText];
     }
     return self;
 }
 
-- (void)buildContentWithImage:(NSImage *)image byteCount:(NSUInteger)byteCount {
+- (void)buildContentWithImage:(NSImage *)image byteCount:(NSUInteger)byteCount title:(NSString *)titleText {
     NSView *content = self.window.contentView;
     NSImageView *imageView = [[NSImageView alloc] init];
     imageView.image = image;
@@ -206,11 +225,11 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
     imageView.wantsLayer = YES;
     imageView.layer.magnificationFilter = kCAFilterNearest;
 
-    NSTextField *title = [NSTextField labelWithString:@"Scan to copy"];
+    NSTextField *title = [NSTextField labelWithString:titleText];
     title.font = [NSFont systemFontOfSize:22 weight:NSFontWeightSemibold];
     title.alignment = NSTextAlignmentCenter;
 
-    NSTextField *detail = [NSTextField labelWithString:[NSString stringWithFormat:@"%lu bytes • Press Esc to close", (unsigned long)byteCount]];
+    NSTextField *detail = [NSTextField labelWithString:[NSString stringWithFormat:@"%lu text bytes • Press Esc to close", (unsigned long)byteCount]];
     detail.font = [NSFont systemFontOfSize:13];
     detail.textColor = NSColor.secondaryLabelColor;
     detail.alignment = NSTextAlignmentCenter;

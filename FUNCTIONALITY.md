@@ -1,4 +1,4 @@
-# CopyQR v1 functionality
+# CopyQR v1.0.1 functionality
 
 CopyQR v1 is a small, native macOS menu-bar utility for moving selected text from a Mac to a phone through a QR code.
 
@@ -6,8 +6,9 @@ CopyQR v1 is a small, native macOS menu-bar utility for moving selected text fro
 
 1. Select text in any macOS application.
 2. Press **Shift-Command-Q**.
-3. CopyQR reads the selected text and displays it as a QR code.
-4. Scan the QR code using a phone camera.
+3. CopyQR reads the selected text and detects whether it is a web link or ordinary text.
+4. Web links are encoded directly. Ordinary text is Base64URL-encoded inside the fragment of the CopyQR receiver URL.
+5. Scan the QR code using a phone camera. For ordinary text, tap **Copy text** on the receiver page.
 
 ## Included functionality
 
@@ -18,7 +19,11 @@ CopyQR v1 is a small, native macOS menu-bar utility for moving selected text fro
 - Generates QR codes locally with Apple's Core Image framework.
 - Keeps the QR window above ordinary windows and available across Spaces.
 - Works entirely offline and includes no accounts, analytics, tracking, uploads, or third-party dependencies.
-- Supports up to 2,900 UTF-8 bytes in one QR code.
+- Keeps web links opening directly on scan.
+- Gives ordinary text a dedicated HTTPS receiver with one-tap copying on iPhone.
+- Keeps text inside the URL fragment, which is not sent to the receiver host in an HTTP request.
+- Removes the fragment from the visible browser URL after decoding.
+- Supports QR payloads up to 2,900 bytes; ordinary text capacity is lower because URL encoding adds overhead.
 - Provides a native Apple-silicon macOS application bundle.
 
 ## Permissions
@@ -27,11 +32,10 @@ CopyQR requests macOS Accessibility permission so it can read text selected in a
 
 ## Current v1 limitations
 
-- Plain-text QR handling depends on the phone's camera application. The iPhone Camera may offer to search plain text instead of copying it.
 - Only one QR frame is supported; oversized text is rejected.
 - The included binary is built for Apple-silicon Macs.
 - The app is ad-hoc signed for local use and is not notarized through the Apple Developer Program.
 
 ## Planned direction
 
-A future version may encode text inside a private HTTPS receiver link so an iPhone opens a minimal page with a dedicated **Copy** button, without requiring the Mac and phone to share a Wi-Fi network.
+A future version may use an encrypted, expiring relay for text too large to fit inside one QR code.
