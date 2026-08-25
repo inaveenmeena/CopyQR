@@ -201,13 +201,13 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
     }
 }
 
-- (void)finishChromeClipboardCaptureWithAttempt:(NSUInteger)attempt
-                             originalChangeCount:(NSInteger)originalChangeCount {
+- (void)finishClipboardCaptureWithAttempt:(NSUInteger)attempt
+                       originalChangeCount:(NSInteger)originalChangeCount {
     NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
     if (pasteboard.changeCount == originalChangeCount && attempt < 12) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 50 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
-            [self finishChromeClipboardCaptureWithAttempt:attempt + 1
-                                       originalChangeCount:originalChangeCount];
+            [self finishClipboardCaptureWithAttempt:attempt + 1
+                                 originalChangeCount:originalChangeCount];
         });
         return;
     }
@@ -215,7 +215,7 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
     if (pasteboard.changeCount == originalChangeCount) {
         self.clipboardCaptureInProgress = NO;
         [self showAlert:@"No text selected"
-                message:@"Chrome didn’t provide selected text. Select ordinary webpage text, then press ⌃Q again."];
+                message:@"The active app didn’t copy any new text. Select some text, then press ⌃Q again."];
         return;
     }
 
@@ -226,13 +226,13 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
         [self showTextAsQR:text];
     } else {
         [self showAlert:@"No text selected"
-                message:@"Chrome copied no text. Select ordinary webpage text, then press ⌃Q again."];
+                message:@"The active app copied no plain text. Select some text, then press ⌃Q again."];
     }
 }
 
-- (BOOL)beginChromeClipboardCaptureForPID:(pid_t)pid {
+- (BOOL)beginClipboardCaptureForPID:(pid_t)pid {
     NSRunningApplication *application = [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
-    if (![application.bundleIdentifier hasPrefix:@"com.google.Chrome"]) return NO;
+    if (!application || application.terminated || pid == NSProcessInfo.processInfo.processIdentifier) return NO;
     if (self.clipboardCaptureInProgress) return YES;
 
     self.clipboardCaptureInProgress = YES;
@@ -250,7 +250,7 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
         CFRelease(keyDown);
         CFRelease(keyUp);
         if (source) CFRelease(source);
-        [self finishChromeClipboardCaptureWithAttempt:0 originalChangeCount:originalChangeCount];
+        [self finishClipboardCaptureWithAttempt:0 originalChangeCount:originalChangeCount];
     });
     return YES;
 }
@@ -305,9 +305,9 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
 
 
     if (text.length == 0) {
-        if ([self beginChromeClipboardCaptureForPID:self.lastExternalApplicationPID]) return;
+        if ([self beginClipboardCaptureForPID:self.lastExternalApplicationPID]) return;
         [self showAlert:@"No text selected"
-                message:@"Select some text, then press ⌃Q. If an app doesn’t expose its selection to macOS, use CopyQR’s clipboard menu option. CopyQR did not access or change your clipboard."];
+                message:@"Select some text, then press ⌃Q again."];
         return;
     }
     [self showTextAsQR:text];
