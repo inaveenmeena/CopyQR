@@ -5,7 +5,7 @@ CopyQR v1 is a small, native macOS menu-bar utility for moving selected text fro
 ## Main workflow
 
 1. Select text in any macOS application.
-2. Press **Shift-Command-R**, or use **Services → Show Selection as QR** from the context menu.
+2. Press **Shift-Command-K**, or use **Services → Show Selection as QR** from the context menu.
 3. macOS passes the selection to CopyQR through its native Services system; Accessibility permission is not required.
 4. CopyQR detects whether it is a web link or ordinary text.
 5. Web links are encoded directly. Ordinary text is Base64URL-encoded inside the fragment of the CopyQR receiver URL.
@@ -15,7 +15,7 @@ CopyQR v1 is a small, native macOS menu-bar utility for moving selected text fro
 
 - Runs as a menu-bar utility without a Dock icon.
 - Receives selected text through the native macOS Services system.
-- Provides **Shift-Command-R** as the service shortcut.
+- Provides **Shift-Command-K** as the service shortcut.
 - Adds **Show Selection as QR** to the Services/right-click menu.
 - Includes a clipboard-based fallback for applications that do not support text Services.
 - Generates QR codes locally with Apple's Core Image framework.
