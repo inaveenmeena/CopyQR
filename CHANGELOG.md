@@ -5,7 +5,8 @@
 - Remember the last active non-CopyQR application so opening the QR panel cannot make CopyQR read its own (empty) selection.
 - Re-check the foreground application at the instant the global shortcut fires, with the system-wide Accessibility lookup retained as a fallback.
 - Read browser webpage selections from nested accessibility web areas and WebKit/Chromium text-marker ranges.
-- Keep shortcut capture completely independent of the macOS clipboard.
+- Add a Chrome-only copy-and-restore fallback when Chrome does not expose webpage selection through Accessibility.
+- Preserve every available pasteboard item and representation, and avoid restoring over a newer clipboard change.
 
 ## 1.0.3
 

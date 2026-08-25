@@ -15,9 +15,10 @@ CopyQR v1 is a small, native macOS menu-bar utility for moving selected text fro
 
 - Runs as a menu-bar utility without a Dock icon.
 - Registers **Control-Q** as a global shortcut.
-- Reads selected text directly through macOS Accessibility APIs without replacing the clipboard.
+- Reads selected text directly through macOS Accessibility APIs without replacing the clipboard whenever the source app exposes it.
 - Remembers the last active non-CopyQR application and reads its focused selection directly, with a system-wide Accessibility lookup as fallback. This prevents CopyQR's own QR window from hiding the source selection.
 - Searches the focused browser window for nested web-area selections and supports WebKit/Chromium text-marker ranges used by Safari and Chrome.
+- When Chrome still withholds ordinary webpage selection, temporarily asks Chrome to copy, generates the QR, and restores all available pasteboard items and data types. A concurrent newer clipboard change is never overwritten.
 - Preserves every character of the selected plain text, including paragraphs, blank lines, spaces, tabs, indentation, and code layout.
 - Tests multiple maximum-level DEFLATE strategies and uses the smallest QR payload, while avoiding compression when it would increase size.
 - Shows current QR bytes, the 2,900-byte limit, percentage used, and original text bytes.
@@ -40,6 +41,8 @@ CopyQR v1 is a small, native macOS menu-bar utility for moving selected text fro
 ## Permissions
 
 CopyQR requires Accessibility permission to read the active selection when **Control-Q** is pressed. Release builds use a stable private self-signed code identity so macOS can retain this permission when the app is updated.
+
+Chrome's fallback briefly changes the system pasteboard. Clipboard managers such as Maccy may record the selected Chrome text and the restored clipboard value even though the visible clipboard is restored.
 
 ## Current v1 limitations
 

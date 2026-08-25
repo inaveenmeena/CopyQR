@@ -99,6 +99,7 @@ static NSString *CopyQRSelectedTextInTree(AXUIElementRef root) {
 @property (nonatomic) EventHotKeyRef hotKeyRef;
 @property (nonatomic) EventHandlerRef eventHandler;
 @property (nonatomic) pid_t lastExternalApplicationPID;
+@property (nonatomic) BOOL clipboardCaptureInProgress;
 - (void)showClipboardAsQR;
 - (void)captureSelectionAndShowQR;
 - (void)updateLastExternalApplication:(NSRunningApplication *)application;
@@ -200,6 +201,94 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
     }
 }
 
+- (NSArray<NSDictionary<NSPasteboardType, NSData *> *> *)pasteboardSnapshot {
+    NSMutableArray *snapshot = [NSMutableArray array];
+    for (NSPasteboardItem *item in NSPasteboard.generalPasteboard.pasteboardItems ?: @[]) {
+        NSMutableDictionary *representations = [NSMutableDictionary dictionary];
+        for (NSPasteboardType type in item.types) {
+            NSData *data = [item dataForType:type];
+            if (data) representations[type] = data;
+        }
+        [snapshot addObject:representations];
+    }
+    return snapshot;
+}
+
+- (void)restorePasteboardSnapshot:(NSArray<NSDictionary<NSPasteboardType, NSData *> *> *)snapshot {
+    NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
+    [pasteboard clearContents];
+    if (snapshot.count == 0) return;
+
+    NSMutableArray<NSPasteboardItem *> *items = [NSMutableArray array];
+    for (NSDictionary<NSPasteboardType, NSData *> *representations in snapshot) {
+        NSPasteboardItem *item = [[NSPasteboardItem alloc] init];
+        for (NSPasteboardType type in representations) [item setData:representations[type] forType:type];
+        [items addObject:item];
+    }
+    [pasteboard writeObjects:items];
+}
+
+- (void)finishChromeClipboardCaptureWithSnapshot:(NSArray<NSDictionary<NSPasteboardType, NSData *> *> *)snapshot
+                                          attempt:(NSUInteger)attempt
+                              originalChangeCount:(NSInteger)originalChangeCount {
+    NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
+    if (pasteboard.changeCount == originalChangeCount && attempt < 12) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 50 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+            [self finishChromeClipboardCaptureWithSnapshot:snapshot
+                                                    attempt:attempt + 1
+                                        originalChangeCount:originalChangeCount];
+        });
+        return;
+    }
+
+    if (pasteboard.changeCount == originalChangeCount) {
+        self.clipboardCaptureInProgress = NO;
+        [self showAlert:@"No text selected"
+                message:@"Chrome didn’t provide selected text. Select ordinary webpage text, then press ⌃Q again."];
+        return;
+    }
+
+    NSInteger copiedChangeCount = pasteboard.changeCount;
+    NSString *text = [pasteboard stringForType:NSPasteboardTypeString];
+
+    // Never overwrite a clipboard update made after Chrome's copy completed.
+    if (pasteboard.changeCount == copiedChangeCount) [self restorePasteboardSnapshot:snapshot];
+    self.clipboardCaptureInProgress = NO;
+
+    if (text.length > 0) {
+        [self showTextAsQR:text];
+    } else {
+        [self showAlert:@"No text selected"
+                message:@"Chrome copied no text. Select ordinary webpage text, then press ⌃Q again."];
+    }
+}
+
+- (BOOL)beginChromeClipboardCaptureForPID:(pid_t)pid {
+    NSRunningApplication *application = [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
+    if (![application.bundleIdentifier hasPrefix:@"com.google.Chrome"]) return NO;
+    if (self.clipboardCaptureInProgress) return YES;
+
+    self.clipboardCaptureInProgress = YES;
+    NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
+    NSArray *snapshot = [self pasteboardSnapshot];
+    NSInteger originalChangeCount = pasteboard.changeCount;
+    [application activateWithOptions:NSApplicationActivateIgnoringOtherApps];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+        CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
+        CGEventRef keyDown = CGEventCreateKeyboardEvent(source, kVK_ANSI_C, true);
+        CGEventRef keyUp = CGEventCreateKeyboardEvent(source, kVK_ANSI_C, false);
+        CGEventSetFlags(keyDown, kCGEventFlagMaskCommand);
+        CGEventSetFlags(keyUp, kCGEventFlagMaskCommand);
+        CGEventPost(kCGHIDEventTap, keyDown);
+        CGEventPost(kCGHIDEventTap, keyUp);
+        CFRelease(keyDown);
+        CFRelease(keyUp);
+        if (source) CFRelease(source);
+        [self finishChromeClipboardCaptureWithSnapshot:snapshot attempt:0 originalChangeCount:originalChangeCount];
+    });
+    return YES;
+}
+
 - (void)captureSelectionAndShowQR {
     NSDictionary *options = @{(__bridge NSString *)kAXTrustedCheckOptionPrompt: @YES};
     BOOL trusted = AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)options);
@@ -250,6 +339,7 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
 
 
     if (text.length == 0) {
+        if ([self beginChromeClipboardCaptureForPID:self.lastExternalApplicationPID]) return;
         [self showAlert:@"No text selected"
                 message:@"Select some text, then press ⌃Q. If an app doesn’t expose its selection to macOS, use CopyQR’s clipboard menu option. CopyQR did not access or change your clipboard."];
         return;
