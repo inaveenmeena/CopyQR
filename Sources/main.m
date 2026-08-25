@@ -27,44 +27,13 @@ static const UInt32 CopyQRHotKeyID = 1;
 - (void)captureSelectionAndShowQR;
 @end
 
-static NSString *CopyQRSelectedTextForElement(AXUIElementRef element) {
-    if (!element) return nil;
-    CFTypeRef selected = NULL;
-    AXError error = AXUIElementCopyAttributeValue(element, kAXSelectedTextAttribute, &selected);
-    NSString *text = nil;
-    if (error == kAXErrorSuccess && selected && CFGetTypeID(selected) == CFStringGetTypeID()) {
-        text = [(__bridge NSString *)selected copy];
-    }
-    if (selected) CFRelease(selected);
-    return text.length ? text : nil;
-}
-
-static NSString *CopyQRSelectedTextInAncestors(AXUIElementRef start) {
-    if (!start) return nil;
-    AXUIElementRef current = (AXUIElementRef)CFRetain(start);
-    for (NSUInteger depth = 0; current && depth < 12; depth++) {
-        NSString *text = CopyQRSelectedTextForElement(current);
-        if (text.length) {
-            CFRelease(current);
-            return text;
-        }
-        CFTypeRef parent = NULL;
-        AXUIElementCopyAttributeValue(current, kAXParentAttribute, &parent);
-        CFRelease(current);
-        current = parent && CFGetTypeID(parent) == AXUIElementGetTypeID() ? (AXUIElementRef)parent : NULL;
-        if (parent && !current) CFRelease(parent);
-    }
-    if (current) CFRelease(current);
-    return nil;
-}
-
 static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, void *userData) {
     EventHotKeyID pressed = {0};
     OSStatus status = GetEventParameter(event, kEventParamDirectObject, typeEventHotKeyID,
                                         NULL, sizeof(pressed), NULL, &pressed);
     if (status == noErr && pressed.signature == CopyQRHotKeySignature && pressed.id == CopyQRHotKeyID) {
         AppDelegate *delegate = (__bridge AppDelegate *)userData;
-        [delegate captureSelectionAndShowQR];
+        dispatch_async(dispatch_get_main_queue(), ^{ [delegate captureSelectionAndShowQR]; });
     }
     return noErr;
 }
@@ -151,39 +120,21 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
     AXError focusedError = AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute, &focused);
     CFRelease(system);
 
-    NSString *text = focused && CFGetTypeID(focused) == AXUIElementGetTypeID()
-        ? CopyQRSelectedTextInAncestors((AXUIElementRef)focused)
-        : nil;
-
-    NSRunningApplication *frontmost = NSWorkspace.sharedWorkspace.frontmostApplication;
-    AXUIElementRef application = frontmost ? AXUIElementCreateApplication(frontmost.processIdentifier) : NULL;
-    if (text.length == 0 && application) {
-        CFTypeRef appFocused = NULL;
-        AXError appFocusedError = AXUIElementCopyAttributeValue(application, kAXFocusedUIElementAttribute, &appFocused);
-        if (appFocusedError == kAXErrorSuccess && appFocused && CFGetTypeID(appFocused) == AXUIElementGetTypeID()) {
-            text = CopyQRSelectedTextInAncestors((AXUIElementRef)appFocused);
-        }
-        if (appFocused) CFRelease(appFocused);
-    }
-
-    if (text.length == 0 && application) {
-        CFTypeRef window = NULL;
-        AXUIElementCopyAttributeValue(application, kAXFocusedWindowAttribute, &window);
-        if (window && CFGetTypeID(window) == AXUIElementGetTypeID()) {
-            text = CopyQRSelectedTextForElement((AXUIElementRef)window);
-        }
-        if (window) CFRelease(window);
-    }
+    CFTypeRef selected = NULL;
+    AXError selectedError = focusedError == kAXErrorSuccess && focused
+        ? AXUIElementCopyAttributeValue((AXUIElementRef)focused, kAXSelectedTextAttribute, &selected)
+        : kAXErrorFailure;
     if (focused) CFRelease(focused);
-    if (application) CFRelease(application);
+
+    NSString *text = nil;
+    if (selectedError == kAXErrorSuccess && selected && CFGetTypeID(selected) == CFStringGetTypeID()) {
+        text = [(__bridge NSString *)selected copy];
+    }
+    if (selected) CFRelease(selected);
 
     if (text.length == 0) {
-        if (focusedError != kAXErrorSuccess) {
-            [self showAccessibilityHelp];
-            return;
-        }
         [self showAlert:@"No text selected"
-                message:[NSString stringWithFormat:@"Select some text, then press ⌃Q. CopyQR could reach %@, but macOS reported no selected text. Your clipboard was not accessed.", frontmost.localizedName ?: @"the foreground app"]];
+                message:@"Select some text, then press ⌃Q. If an app doesn’t expose its selection to macOS, use CopyQR’s clipboard menu option. CopyQR did not access or change your clipboard."];
         return;
     }
     [self showTextAsQR:text];
