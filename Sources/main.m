@@ -201,42 +201,13 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
     }
 }
 
-- (NSArray<NSDictionary<NSPasteboardType, NSData *> *> *)pasteboardSnapshot {
-    NSMutableArray *snapshot = [NSMutableArray array];
-    for (NSPasteboardItem *item in NSPasteboard.generalPasteboard.pasteboardItems ?: @[]) {
-        NSMutableDictionary *representations = [NSMutableDictionary dictionary];
-        for (NSPasteboardType type in item.types) {
-            NSData *data = [item dataForType:type];
-            if (data) representations[type] = data;
-        }
-        [snapshot addObject:representations];
-    }
-    return snapshot;
-}
-
-- (void)restorePasteboardSnapshot:(NSArray<NSDictionary<NSPasteboardType, NSData *> *> *)snapshot {
-    NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
-    [pasteboard clearContents];
-    if (snapshot.count == 0) return;
-
-    NSMutableArray<NSPasteboardItem *> *items = [NSMutableArray array];
-    for (NSDictionary<NSPasteboardType, NSData *> *representations in snapshot) {
-        NSPasteboardItem *item = [[NSPasteboardItem alloc] init];
-        for (NSPasteboardType type in representations) [item setData:representations[type] forType:type];
-        [items addObject:item];
-    }
-    [pasteboard writeObjects:items];
-}
-
-- (void)finishChromeClipboardCaptureWithSnapshot:(NSArray<NSDictionary<NSPasteboardType, NSData *> *> *)snapshot
-                                          attempt:(NSUInteger)attempt
-                              originalChangeCount:(NSInteger)originalChangeCount {
+- (void)finishChromeClipboardCaptureWithAttempt:(NSUInteger)attempt
+                             originalChangeCount:(NSInteger)originalChangeCount {
     NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
     if (pasteboard.changeCount == originalChangeCount && attempt < 12) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 50 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
-            [self finishChromeClipboardCaptureWithSnapshot:snapshot
-                                                    attempt:attempt + 1
-                                        originalChangeCount:originalChangeCount];
+            [self finishChromeClipboardCaptureWithAttempt:attempt + 1
+                                       originalChangeCount:originalChangeCount];
         });
         return;
     }
@@ -248,11 +219,7 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
         return;
     }
 
-    NSInteger copiedChangeCount = pasteboard.changeCount;
     NSString *text = [pasteboard stringForType:NSPasteboardTypeString];
-
-    // Never overwrite a clipboard update made after Chrome's copy completed.
-    if (pasteboard.changeCount == copiedChangeCount) [self restorePasteboardSnapshot:snapshot];
     self.clipboardCaptureInProgress = NO;
 
     if (text.length > 0) {
@@ -270,7 +237,6 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
 
     self.clipboardCaptureInProgress = YES;
     NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
-    NSArray *snapshot = [self pasteboardSnapshot];
     NSInteger originalChangeCount = pasteboard.changeCount;
     [application activateWithOptions:NSApplicationActivateIgnoringOtherApps];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
@@ -284,7 +250,7 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
         CFRelease(keyDown);
         CFRelease(keyUp);
         if (source) CFRelease(source);
-        [self finishChromeClipboardCaptureWithSnapshot:snapshot attempt:0 originalChangeCount:originalChangeCount];
+        [self finishChromeClipboardCaptureWithAttempt:0 originalChangeCount:originalChangeCount];
     });
     return YES;
 }
