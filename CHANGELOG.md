@@ -2,7 +2,7 @@
 
 ## 1.0.3
 
-- Capture the foreground app at shortcut time and read its focused Accessibility hierarchy, fixing lost browser selections without touching the clipboard.
+- Read the globally focused Accessibility element synchronously inside the hotkey event, avoiding the focus race that caused false “No text selected” errors.
 - Strengthen visual copy confirmation on iPhone, where Safari does not expose custom web haptics.
 - Add cross-platform, versioned maximum-level DEFLATE compression with automatic plain-text fallback.
 - Preserve exact plain-text layout, including blank lines, indentation, tabs, and code formatting.

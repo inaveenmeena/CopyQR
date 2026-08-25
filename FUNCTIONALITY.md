@@ -16,7 +16,7 @@ CopyQR v1 is a small, native macOS menu-bar utility for moving selected text fro
 - Runs as a menu-bar utility without a Dock icon.
 - Registers **Control-Q** as a global shortcut.
 - Reads selected text directly through macOS Accessibility APIs without replacing the clipboard.
-- Captures the foreground app at the instant the shortcut is pressed and reads through its focused Accessibility hierarchy without using the clipboard.
+- Reads the globally focused Accessibility element synchronously at the instant the shortcut fires, with a foreground-app hierarchy fallback and no clipboard access.
 - Preserves every character of the selected plain text, including paragraphs, blank lines, spaces, tabs, indentation, and code layout.
 - Tests multiple maximum-level DEFLATE strategies and uses the smallest QR payload, while avoiding compression when it would increase size.
 - Shows current QR bytes, the 2,900-byte limit, percentage used, and original text bytes.
