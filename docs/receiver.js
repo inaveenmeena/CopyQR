@@ -45,6 +45,8 @@
     }
 
     if (copied) {
+      // Android and other supporting browsers vibrate here. WebKit on iPhone
+      // currently exposes no web API for custom Taptic Engine feedback.
       if (navigator.vibrate) navigator.vibrate(35);
       copyButton.classList.add("copied");
       copyButton.querySelector(".button-label").textContent = "Copied";

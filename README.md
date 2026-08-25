@@ -13,11 +13,15 @@ See [FUNCTIONALITY.md](FUNCTIONALITY.md) for the complete v1 feature set, permis
 
 Accessibility permission lets CopyQR read the text you actively select when its global shortcut is pressed. You can also copy text normally, click the QR icon in the macOS menu bar, and choose **Show Clipboard as QR**.
 
+When a browser does not expose its selection directly, CopyQR briefly invokes Copy, reads the selected text, and restores the previous clipboard contents and formats automatically.
+
 The menu shows whether Accessibility and the global shortcut are ready, opens the correct Settings page when permission is missing, and offers an optional **Launch at Login** toggle.
 
 CopyQR has no analytics and never uploads selected text. Ordinary text is encoded after `#` in the receiver URL; URL fragments are not sent in HTTP requests. The static receiver contains no accounts, storage, cookies, or third-party scripts.
 
 The encoded receiver URL must still fit in one QR code. v1.0.3 applies maximum-level DEFLATE compression and automatically keeps the smaller of the compressed and plain payloads. Capacity therefore depends on the text: repetitive prose and code can fit substantially more than random or already-compressed content. The QR panel shows exact usage against the 2,900-byte payload limit and oversized selections receive a reduction estimate.
+
+The receiver provides animated copy confirmation everywhere and vibration on browsers that implement the web Vibration API. iPhone Safari currently does not expose custom web haptics, so its confirmation is visual.
 
 ## Build
 

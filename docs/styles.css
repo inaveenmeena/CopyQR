@@ -84,14 +84,20 @@ button {
 button:active { transform: scale(.985); background: var(--green-dark); }
 .button-check { display: none; margin-left: 7px; }
 button.copied .button-check { display: inline; }
-.just-copied .card { animation: copied-glow .62s ease-out; }
-.just-copied button.copied { background: var(--green-dark); transform: scale(.985); }
+.just-copied .card { animation: copied-glow .72s ease-out; }
+.just-copied button.copied { background: var(--green-dark); animation: copied-pop .42s cubic-bezier(.2,.9,.3,1.35); }
 .status { min-height: 20px; margin: 10px 0 0; color: var(--green); text-align: center; font-size: 13px; font-weight: 650; }
 
 @keyframes copied-glow {
   0% { box-shadow: 0 24px 80px rgba(68,61,47,.13), 0 0 0 0 rgba(29,106,70,.3); }
   55% { box-shadow: 0 24px 80px rgba(68,61,47,.13), 0 0 0 9px rgba(29,106,70,.08); }
   100% { box-shadow: 0 24px 80px rgba(68,61,47,.13), 0 0 0 0 rgba(29,106,70,0); }
+}
+
+@keyframes copied-pop {
+  0% { transform: scale(.985); }
+  45% { transform: scale(1.025); }
+  100% { transform: scale(1); }
 }
 
 .steps { display: flex; align-items: center; justify-content: space-between; margin: 38px 0 72px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 18px; background: #f7f4ed; font-size: 14px; font-weight: 720; }

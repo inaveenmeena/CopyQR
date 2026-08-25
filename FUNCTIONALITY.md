@@ -16,6 +16,7 @@ CopyQR v1 is a small, native macOS menu-bar utility for moving selected text fro
 - Runs as a menu-bar utility without a Dock icon.
 - Registers **Control-Q** as a global shortcut.
 - Reads selected text directly through macOS Accessibility APIs without replacing the clipboard.
+- Falls back to a temporary Copy action in browsers that hide their selection from Accessibility, then restores every available clipboard item and type.
 - Preserves every character of the selected plain text, including paragraphs, blank lines, spaces, tabs, indentation, and code layout.
 - Tests multiple maximum-level DEFLATE strategies and uses the smallest QR payload, while avoiding compression when it would increase size.
 - Shows current QR bytes, the 2,900-byte limit, percentage used, and original text bytes.
@@ -32,7 +33,7 @@ CopyQR v1 is a small, native macOS menu-bar utility for moving selected text fro
 - Removes the fragment from the visible browser URL after decoding.
 - Supports QR payloads up to 2,900 bytes; source-text capacity varies with compressibility.
 - Uses a versioned, cross-platform payload format: `v1` is plain UTF-8 and `v2` is raw DEFLATE. Both are Base64URL encoded.
-- Gives clear animated confirmation after copying on the receiver and requests a short vibration on browsers that support web haptics.
+- Gives clear animated confirmation after copying on the receiver and requests a short vibration on browsers that support web haptics. iPhone Safari currently provides visual confirmation only because WebKit does not expose custom device vibration.
 - Provides a native Apple-silicon macOS application bundle.
 
 ## Permissions

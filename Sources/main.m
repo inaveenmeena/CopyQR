@@ -132,12 +132,63 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
     }
     if (selected) CFRelease(selected);
 
+    if (text.length == 0) text = [self copySelectionAndRestoreClipboard];
+
     if (text.length == 0) {
         [self showAlert:@"No text selected"
-                message:@"Select some text, then press ⌃Q. If an app doesn’t expose its selection to macOS, use CopyQR’s clipboard menu option."];
+                message:@"Select some text, then press ⌃Q. CopyQR tried both direct selection access and the browser-compatible copy fallback."];
         return;
     }
     [self showTextAsQR:text];
+}
+
+- (NSArray<NSDictionary<NSPasteboardType, NSData *> *> *)clipboardSnapshot:(NSPasteboard *)pasteboard {
+    NSMutableArray *snapshot = [NSMutableArray array];
+    for (NSPasteboardItem *item in pasteboard.pasteboardItems ?: @[]) {
+        NSMutableDictionary *contents = [NSMutableDictionary dictionary];
+        for (NSPasteboardType type in item.types) {
+            NSData *data = [item dataForType:type];
+            if (data) contents[type] = data;
+        }
+        [snapshot addObject:contents];
+    }
+    return snapshot;
+}
+
+- (void)restoreClipboard:(NSArray<NSDictionary<NSPasteboardType, NSData *> *> *)snapshot
+              pasteboard:(NSPasteboard *)pasteboard {
+    NSMutableArray<NSPasteboardItem *> *items = [NSMutableArray array];
+    for (NSDictionary<NSPasteboardType, NSData *> *contents in snapshot) {
+        NSPasteboardItem *item = [[NSPasteboardItem alloc] init];
+        for (NSPasteboardType type in contents) [item setData:contents[type] forType:type];
+        [items addObject:item];
+    }
+    [pasteboard clearContents];
+    if (items.count) [pasteboard writeObjects:items];
+}
+
+- (NSString *)copySelectionAndRestoreClipboard {
+    NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
+    NSArray *snapshot = [self clipboardSnapshot:pasteboard];
+    NSInteger previousChangeCount = pasteboard.changeCount;
+
+    CGEventRef keyDown = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)kVK_ANSI_C, true);
+    CGEventRef keyUp = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)kVK_ANSI_C, false);
+    CGEventSetFlags(keyDown, kCGEventFlagMaskCommand);
+    CGEventSetFlags(keyUp, kCGEventFlagMaskCommand);
+    CGEventPost(kCGHIDEventTap, keyDown);
+    CGEventPost(kCGHIDEventTap, keyUp);
+    CFRelease(keyDown);
+    CFRelease(keyUp);
+
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:0.6];
+    while (pasteboard.changeCount == previousChangeCount && deadline.timeIntervalSinceNow > 0) {
+        [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.015]];
+    }
+
+    NSString *text = [pasteboard stringForType:NSPasteboardTypeString];
+    [self restoreClipboard:snapshot pasteboard:pasteboard];
+    return text;
 }
 
 - (NSData *)rawDeflateData:(NSData *)input strategy:(int)strategy {

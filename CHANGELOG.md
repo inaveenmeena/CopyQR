@@ -2,6 +2,8 @@
 
 ## 1.0.3
 
+- Add a browser-compatible selection fallback that restores the previous clipboard after reading the selection.
+- Strengthen visual copy confirmation on iPhone, where Safari does not expose custom web haptics.
 - Add cross-platform, versioned maximum-level DEFLATE compression with automatic plain-text fallback.
 - Preserve exact plain-text layout, including blank lines, indentation, tabs, and code formatting.
 - Show QR payload bytes, percentage used, and original text bytes in the QR window.
