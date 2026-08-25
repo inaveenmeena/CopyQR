@@ -10,6 +10,81 @@ static const NSUInteger CopyQRMaximumPayloadBytes = 2900;
 static const OSType CopyQRHotKeySignature = 'CQR!';
 static const UInt32 CopyQRHotKeyID = 1;
 
+static NSString *CopyQRSelectedTextFromElement(AXUIElementRef element) {
+    if (!element) return nil;
+    CFTypeRef value = NULL;
+    AXError error = AXUIElementCopyAttributeValue(element, kAXSelectedTextAttribute, &value);
+    NSString *text = error == kAXErrorSuccess && value && CFGetTypeID(value) == CFStringGetTypeID()
+        ? [(__bridge NSString *)value copy]
+        : nil;
+    if (value) CFRelease(value);
+    if (text.length > 0) return text;
+
+    // WebKit and Chromium represent normal webpage selection with opaque text
+    // markers instead of kAXSelectedTextAttribute.
+    CFTypeRef markerRange = NULL;
+    error = AXUIElementCopyAttributeValue(element, CFSTR("AXSelectedTextMarkerRange"), &markerRange);
+    if (error != kAXErrorSuccess || !markerRange) return nil;
+
+    CFTypeRef markerText = NULL;
+    error = AXUIElementCopyParameterizedAttributeValue(element,
+                                                        CFSTR("AXStringForTextMarkerRange"),
+                                                        markerRange,
+                                                        &markerText);
+    text = error == kAXErrorSuccess && markerText && CFGetTypeID(markerText) == CFStringGetTypeID()
+        ? [(__bridge NSString *)markerText copy]
+        : nil;
+    if (markerText) CFRelease(markerText);
+    if (text.length == 0) {
+        CFTypeRef attributedText = NULL;
+        error = AXUIElementCopyParameterizedAttributeValue(element,
+                                                            CFSTR("AXAttributedStringForTextMarkerRange"),
+                                                            markerRange,
+                                                            &attributedText);
+        if (error == kAXErrorSuccess && attributedText &&
+            CFGetTypeID(attributedText) == CFAttributedStringGetTypeID()) {
+            text = [(__bridge NSString *)CFAttributedStringGetString((CFAttributedStringRef)attributedText) copy];
+        }
+        if (attributedText) CFRelease(attributedText);
+    }
+    CFRelease(markerRange);
+    return text.length > 0 ? text : nil;
+}
+
+// Browsers expose ordinary webpage selections on an AXWebArea below the
+// focused window, rather than on the focused element itself.
+static NSString *CopyQRSelectedTextInTree(AXUIElementRef root) {
+    if (!root) return nil;
+    CFMutableArrayRef queue = CFArrayCreateMutable(NULL, 0, &kCFTypeArrayCallBacks);
+    CFArrayAppendValue(queue, root);
+    CFIndex cursor = 0;
+    const CFIndex maximumElements = 3000;
+
+    while (cursor < CFArrayGetCount(queue) && cursor < maximumElements) {
+        AXUIElementRef element = (AXUIElementRef)CFArrayGetValueAtIndex(queue, cursor++);
+        NSString *text = CopyQRSelectedTextFromElement(element);
+        if (text.length > 0) {
+            CFRelease(queue);
+            return text;
+        }
+
+        CFTypeRef children = NULL;
+        AXError error = AXUIElementCopyAttributeValue(element, kAXChildrenAttribute, &children);
+        if (error == kAXErrorSuccess && children && CFGetTypeID(children) == CFArrayGetTypeID()) {
+            CFArrayRef childArray = (CFArrayRef)children;
+            CFIndex childCount = CFArrayGetCount(childArray);
+            for (CFIndex index = 0; index < childCount; index++) {
+                CFTypeRef child = CFArrayGetValueAtIndex(childArray, index);
+                if (child && CFGetTypeID(child) == AXUIElementGetTypeID()) CFArrayAppendValue(queue, child);
+            }
+        }
+        if (children) CFRelease(children);
+    }
+
+    CFRelease(queue);
+    return nil;
+}
+
 @interface QRPanelController : NSWindowController <NSWindowDelegate>
 @property (nonatomic, copy) void (^onClose)(void);
 - (instancetype)initWithImage:(NSImage *)image payloadBytes:(NSUInteger)payloadBytes sourceBytes:(NSUInteger)sourceBytes title:(NSString *)title;
@@ -134,13 +209,14 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
     }
 
     CFTypeRef focused = NULL;
+    CFTypeRef focusedWindow = NULL;
     AXError focusedError = kAXErrorInvalidUIElement;
     AXUIElementRef sourceApplication = self.lastExternalApplicationPID > 0
         ? AXUIElementCreateApplication(self.lastExternalApplicationPID)
         : NULL;
     if (sourceApplication) {
         focusedError = AXUIElementCopyAttributeValue(sourceApplication, kAXFocusedUIElementAttribute, &focused);
-        CFRelease(sourceApplication);
+        AXUIElementCopyAttributeValue(sourceApplication, kAXFocusedWindowAttribute, &focusedWindow);
     }
     if (focusedError != kAXErrorSuccess || !focused) {
         if (focused) { CFRelease(focused); focused = NULL; }
@@ -152,13 +228,26 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
     AXError selectedError = focusedError == kAXErrorSuccess && focused
         ? AXUIElementCopyAttributeValue((AXUIElementRef)focused, kAXSelectedTextAttribute, &selected)
         : kAXErrorFailure;
-    if (focused) CFRelease(focused);
-
     NSString *text = nil;
     if (selectedError == kAXErrorSuccess && selected && CFGetTypeID(selected) == CFStringGetTypeID()) {
         text = [(__bridge NSString *)selected copy];
     }
     if (selected) CFRelease(selected);
+
+    if (text.length == 0 && focused) {
+        text = CopyQRSelectedTextInTree((AXUIElementRef)focused);
+    }
+    if (text.length == 0 && focusedWindow && CFGetTypeID(focusedWindow) == AXUIElementGetTypeID()) {
+        text = CopyQRSelectedTextInTree((AXUIElementRef)focusedWindow);
+    }
+    if (text.length == 0 && sourceApplication) {
+        text = CopyQRSelectedTextInTree(sourceApplication);
+    }
+
+    if (focused) CFRelease(focused);
+    if (focusedWindow) CFRelease(focusedWindow);
+    if (sourceApplication) CFRelease(sourceApplication);
+
 
     if (text.length == 0) {
         [self showAlert:@"No text selected"
