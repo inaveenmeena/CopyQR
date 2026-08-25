@@ -31,3 +31,5 @@ chmod +x build.sh
 ```
 
 The build uses only Apple frameworks and the Clang compiler included with macOS Command Line Tools.
+
+Release builds are signed with the private **CopyQR Local Release** certificate so macOS keeps one stable app identity across updates. Developers without that certificate can explicitly request an ad-hoc local build with `COPYQR_SIGNING_IDENTITY=- ./build.sh`; those local builds do not retain privacy permissions across rebuilds.

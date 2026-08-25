@@ -2,6 +2,7 @@
 
 ## 1.0.3
 
+- Replace version-specific ad-hoc signing with a stable private CopyQR release identity so Accessibility approval can persist across updates.
 - Read the globally focused Accessibility element synchronously inside the hotkey event, avoiding the focus race that caused false “No text selected” errors.
 - Strengthen visual copy confirmation on iPhone, where Safari does not expose custom web haptics.
 - Add cross-platform, versioned maximum-level DEFLATE compression with automatic plain-text fallback.

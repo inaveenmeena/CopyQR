@@ -38,13 +38,13 @@ CopyQR v1 is a small, native macOS menu-bar utility for moving selected text fro
 
 ## Permissions
 
-CopyQR requires Accessibility permission to read the active selection when **Control-Q** is pressed. macOS prompts for this permission once for the installed build. Because the free public build is ad-hoc signed, macOS may request permission again after replacing the app with a newly built update.
+CopyQR requires Accessibility permission to read the active selection when **Control-Q** is pressed. Release builds use a stable private self-signed code identity so macOS can retain this permission when the app is updated.
 
 ## Current v1 limitations
 
 - Only one QR frame is supported; oversized text is rejected.
 - The included binary is built for Apple-silicon Macs.
-- The app is ad-hoc signed for local use and is not notarized through the Apple Developer Program.
+- The app uses a stable self-signed release identity but is not Apple-notarized, so public downloads still require the user to approve opening an unidentified developer app.
 - Compressed `v2` receiver links require a browser with raw-DEFLATE Compression Streams support (Safari/iOS 16.4 or newer, or a comparable modern browser).
 
 ## Planned direction
