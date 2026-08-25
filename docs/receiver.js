@@ -8,13 +8,24 @@
   const copyButton = document.querySelector("#copy-button");
   const status = document.querySelector("#status");
 
-  function decodePayload(hash) {
-    if (!hash.startsWith("#v1.")) throw new Error("Unsupported payload");
-    let encoded = hash.slice(4).replace(/-/g, "+").replace(/_/g, "/");
+  function base64URLBytes(encoded) {
+    encoded = encoded.replace(/-/g, "+").replace(/_/g, "/");
     encoded += "=".repeat((4 - encoded.length % 4) % 4);
     const binary = atob(encoded);
-    const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return Uint8Array.from(binary, character => character.charCodeAt(0));
+  }
+
+  async function inflateRaw(bytes) {
+    if (!("DecompressionStream" in window)) throw new Error("Compression is not supported by this browser");
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+
+  async function decodePayload(hash) {
+    const decoder = new TextDecoder("utf-8", { fatal: true });
+    if (hash.startsWith("#v1.")) return decoder.decode(base64URLBytes(hash.slice(4)));
+    if (hash.startsWith("#v2.")) return decoder.decode(await inflateRaw(base64URLBytes(hash.slice(4))));
+    throw new Error("Unsupported payload");
   }
 
   function fallbackCopy() {
@@ -34,12 +45,15 @@
     }
 
     if (copied) {
+      if (navigator.vibrate) navigator.vibrate(35);
       copyButton.classList.add("copied");
       copyButton.querySelector(".button-label").textContent = "Copied";
       status.textContent = "Ready to paste anywhere.";
+      document.body.classList.add("just-copied");
       setTimeout(() => {
         copyButton.classList.remove("copied");
         copyButton.querySelector(".button-label").textContent = "Copy text";
+        document.body.classList.remove("just-copied");
       }, 2200);
     } else {
       status.textContent = "Press and hold the text, then choose Copy.";
@@ -53,12 +67,14 @@
     return;
   }
 
-  try {
-    textArea.value = decodePayload(location.hash);
-    payloadView.hidden = false;
-    history.replaceState(null, "", location.pathname + location.search);
-    copyButton.addEventListener("click", copyText);
-  } catch (_) {
-    errorView.hidden = false;
-  }
+  (async () => {
+    try {
+      textArea.value = await decodePayload(location.hash);
+      payloadView.hidden = false;
+      history.replaceState(null, "", location.pathname + location.search);
+      copyButton.addEventListener("click", copyText);
+    } catch (_) {
+      errorView.hidden = false;
+    }
+  })();
 })();

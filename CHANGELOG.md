@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.3
+
+- Add cross-platform, versioned maximum-level DEFLATE compression with automatic plain-text fallback.
+- Preserve exact plain-text layout, including blank lines, indentation, tabs, and code formatting.
+- Show QR payload bytes, percentage used, and original text bytes in the QR window.
+- Give actionable size, reduction, and chunk guidance when text exceeds one QR.
+- Show Accessibility readiness and provide one-click access to Accessibility Settings.
+- Add optional Launch at Login.
+- Add a polished copied animation and supported web haptic feedback on the phone receiver.
+- Retain compatibility with v1.0.2 receiver links.
+
 ## 1.0.2
 
 - Restore the global shortcut and Accessibility-based selection capture from v1.0.0.

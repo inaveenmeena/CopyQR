@@ -20,6 +20,8 @@ clang \
   -framework Carbon \
   -framework CoreImage \
   -framework QuartzCore \
+  -framework ServiceManagement \
+  -lz \
   "$ROOT_DIR/Sources/main.m" \
   -o "$MACOS_DIR/CopyQR"
 

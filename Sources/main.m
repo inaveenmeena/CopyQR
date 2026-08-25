@@ -2,19 +2,25 @@
 #import <ApplicationServices/ApplicationServices.h>
 #import <Carbon/Carbon.h>
 #import <CoreImage/CoreImage.h>
+#import <ServiceManagement/ServiceManagement.h>
+#include <zlib.h>
 
 static NSString *const CopyQRReceiverURL = @"https://inaveenmeena.github.io/CopyQR/";
+static const NSUInteger CopyQRMaximumPayloadBytes = 2900;
 static const OSType CopyQRHotKeySignature = 'CQR!';
 static const UInt32 CopyQRHotKeyID = 1;
 
 @interface QRPanelController : NSWindowController <NSWindowDelegate>
 @property (nonatomic, copy) void (^onClose)(void);
-- (instancetype)initWithImage:(NSImage *)image byteCount:(NSUInteger)byteCount title:(NSString *)title;
+- (instancetype)initWithImage:(NSImage *)image payloadBytes:(NSUInteger)payloadBytes sourceBytes:(NSUInteger)sourceBytes title:(NSString *)title;
 @end
 
-@interface AppDelegate : NSObject <NSApplicationDelegate>
+@interface AppDelegate : NSObject <NSApplicationDelegate, NSMenuDelegate>
 @property (nonatomic, strong) NSStatusItem *statusItem;
 @property (nonatomic, strong) QRPanelController *panel;
+@property (nonatomic, strong) NSMenuItem *permissionItem;
+@property (nonatomic, strong) NSMenuItem *settingsItem;
+@property (nonatomic, strong) NSMenuItem *launchItem;
 @property (nonatomic) EventHotKeyRef hotKeyRef;
 @property (nonatomic) EventHandlerRef eventHandler;
 - (void)showClipboardAsQR;
@@ -46,6 +52,7 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
     self.statusItem.button.toolTip = @"Selected text to QR";
 
     NSMenu *menu = [[NSMenu alloc] init];
+    menu.delegate = self;
     NSMenuItem *show = [[NSMenuItem alloc] initWithTitle:@"Show Clipboard as QR"
                                                   action:@selector(showClipboardAsQR)
                                            keyEquivalent:@""];
@@ -55,11 +62,37 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
     NSMenuItem *shortcut = [[NSMenuItem alloc] initWithTitle:@"Shortcut: ⌃Q" action:nil keyEquivalent:@""];
     shortcut.enabled = NO;
     [menu addItem:shortcut];
+    self.permissionItem = [[NSMenuItem alloc] initWithTitle:@"Accessibility: Checking…" action:nil keyEquivalent:@""];
+    self.permissionItem.enabled = NO;
+    [menu addItem:self.permissionItem];
+    self.settingsItem = [[NSMenuItem alloc] initWithTitle:@"Open Accessibility Settings…"
+                                                    action:@selector(openAccessibilitySettings)
+                                             keyEquivalent:@""];
+    self.settingsItem.target = self;
+    [menu addItem:self.settingsItem];
+    [menu addItem:[NSMenuItem separatorItem]];
+    self.launchItem = [[NSMenuItem alloc] initWithTitle:@"Launch at Login"
+                                                  action:@selector(toggleLaunchAtLogin:)
+                                           keyEquivalent:@""];
+    self.launchItem.target = self;
+    [menu addItem:self.launchItem];
     [menu addItem:[NSMenuItem separatorItem]];
     NSMenuItem *quit = [[NSMenuItem alloc] initWithTitle:@"Quit CopyQR" action:@selector(quitApp) keyEquivalent:@"q"];
     quit.target = self;
     [menu addItem:quit];
     self.statusItem.menu = menu;
+}
+
+- (void)menuWillOpen:(NSMenu *)menu {
+    BOOL trusted = AXIsProcessTrusted();
+    self.permissionItem.title = trusted ? @"Accessibility: Ready ✓" : @"Accessibility: Permission needed";
+    self.settingsItem.hidden = trusted;
+
+    SMAppServiceStatus status = SMAppService.mainAppService.status;
+    self.launchItem.state = status == SMAppServiceStatusEnabled ? NSControlStateValueOn : NSControlStateValueOff;
+    self.launchItem.title = status == SMAppServiceStatusRequiresApproval
+        ? @"Launch at Login (approval needed)"
+        : @"Launch at Login";
 }
 
 - (void)registerHotKey {
@@ -78,8 +111,7 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
 - (void)captureSelectionAndShowQR {
     NSDictionary *options = @{(__bridge NSString *)kAXTrustedCheckOptionPrompt: @YES};
     if (!AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)options)) {
-        [self showAlert:@"Allow Accessibility access"
-                message:@"Enable CopyQR in System Settings → Privacy & Security → Accessibility, then press ⌃Q again."];
+        [self showAccessibilityHelp];
         return;
     }
 
@@ -106,6 +138,40 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
         return;
     }
     [self showTextAsQR:text];
+}
+
+- (NSData *)rawDeflateData:(NSData *)input strategy:(int)strategy {
+    if (input.length > UINT_MAX) return nil;
+    uLong bound = compressBound((uLong)input.length);
+    NSMutableData *output = [NSMutableData dataWithLength:bound];
+    z_stream stream = {0};
+    if (deflateInit2(&stream, Z_BEST_COMPRESSION, Z_DEFLATED, -MAX_WBITS, 9, strategy) != Z_OK) return nil;
+    stream.next_in = (Bytef *)input.bytes;
+    stream.avail_in = (uInt)input.length;
+    stream.next_out = output.mutableBytes;
+    stream.avail_out = (uInt)output.length;
+    int result = deflate(&stream, Z_FINISH);
+    deflateEnd(&stream);
+    if (result != Z_STREAM_END) return nil;
+    output.length = stream.total_out;
+    return output;
+}
+
+- (NSData *)smallestCompressedData:(NSData *)input {
+    const int strategies[] = { Z_DEFAULT_STRATEGY, Z_FILTERED, Z_HUFFMAN_ONLY, Z_RLE };
+    NSData *best = nil;
+    for (NSUInteger i = 0; i < sizeof(strategies) / sizeof(strategies[0]); i++) {
+        NSData *candidate = [self rawDeflateData:input strategy:strategies[i]];
+        if (candidate && (!best || candidate.length < best.length)) best = candidate;
+    }
+    return best;
+}
+
+- (NSString *)base64URLStringForData:(NSData *)data {
+    NSString *encoded = [data base64EncodedStringWithOptions:0];
+    encoded = [[encoded stringByReplacingOccurrencesOfString:@"+" withString:@"-"]
+               stringByReplacingOccurrencesOfString:@"/" withString:@"_"];
+    return [encoded stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"="]];
 }
 
 - (NSImage *)qrImageForData:(NSData *)data {
@@ -142,21 +208,30 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
     BOOL isWebLink = ([scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"]) && components.host.length > 0;
 
     NSString *qrContent;
+    NSUInteger sourceBytes = [text dataUsingEncoding:NSUTF8StringEncoding].length;
     if (isWebLink) {
         qrContent = trimmed;
     } else {
         NSData *textData = [text dataUsingEncoding:NSUTF8StringEncoding];
-        NSString *encoded = [textData base64EncodedStringWithOptions:0];
-        encoded = [[encoded stringByReplacingOccurrencesOfString:@"+" withString:@"-"]
-                   stringByReplacingOccurrencesOfString:@"/" withString:@"_"];
-        encoded = [encoded stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"="]];
-        qrContent = [NSString stringWithFormat:@"%@#v1.%@", CopyQRReceiverURL, encoded];
+        NSString *plainURL = [NSString stringWithFormat:@"%@#v1.%@", CopyQRReceiverURL,
+                              [self base64URLStringForData:textData]];
+        NSData *compressed = [self smallestCompressedData:textData];
+        NSString *compressedURL = compressed
+            ? [NSString stringWithFormat:@"%@#v2.%@", CopyQRReceiverURL,
+               [self base64URLStringForData:compressed]]
+            : nil;
+        qrContent = compressedURL.length < plainURL.length ? compressedURL : plainURL;
     }
 
     NSData *payload = [qrContent dataUsingEncoding:NSUTF8StringEncoding];
-    if (payload.length > 2900) {
+    if (payload.length > CopyQRMaximumPayloadBytes) {
+        NSUInteger over = payload.length - CopyQRMaximumPayloadBytes;
+        NSUInteger percent = (NSUInteger)ceil((double)over * 100.0 / (double)payload.length);
+        NSUInteger parts = (NSUInteger)ceil((double)payload.length / (double)CopyQRMaximumPayloadBytes);
         [self showAlert:@"Text is too large"
-                message:[NSString stringWithFormat:@"This text needs %lu QR bytes after URL encoding. CopyQR v1.0.2 supports up to 2,900, which is at most 2,143 UTF-8 text bytes. Try a shorter selection.", (unsigned long)payload.length]];
+                message:[NSString stringWithFormat:@"This selection is %lu text bytes and needs %lu QR bytes after the best available compression. That is %lu bytes over the 2,900-byte limit. Shorten it by about %lu%% or split it into roughly %lu chunks.",
+                         (unsigned long)sourceBytes, (unsigned long)payload.length,
+                         (unsigned long)over, (unsigned long)percent, (unsigned long)parts]];
         return;
     }
 
@@ -168,7 +243,8 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
 
     [self.panel close];
     QRPanelController *controller = [[QRPanelController alloc] initWithImage:image
-                                                                   byteCount:[text dataUsingEncoding:NSUTF8StringEncoding].length
+                                                                payloadBytes:payload.length
+                                                                 sourceBytes:sourceBytes
                                                                        title:isWebLink ? @"Scan to open" : @"Scan to copy"];
     self.panel = controller;
     __weak typeof(self) weakSelf = self;
@@ -179,6 +255,31 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
     [controller showWindow:nil];
     [NSApp activateIgnoringOtherApps:YES];
     [controller.window makeKeyAndOrderFront:nil];
+}
+
+- (void)showAccessibilityHelp {
+    [NSApp activateIgnoringOtherApps:YES];
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.messageText = @"Allow Accessibility access";
+    alert.informativeText = @"Enable CopyQR in System Settings → Privacy & Security → Accessibility, then press ⌃Q again.";
+    [alert addButtonWithTitle:@"Open Settings"];
+    [alert addButtonWithTitle:@"Not Now"];
+    if ([alert runModal] == NSAlertFirstButtonReturn) [self openAccessibilitySettings];
+}
+
+- (void)openAccessibilitySettings {
+    NSURL *url = [NSURL URLWithString:@"x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"];
+    [NSWorkspace.sharedWorkspace openURL:url];
+}
+
+- (void)toggleLaunchAtLogin:(NSMenuItem *)sender {
+    SMAppService *service = SMAppService.mainAppService;
+    NSError *error = nil;
+    BOOL turningOff = service.status == SMAppServiceStatusEnabled || service.status == SMAppServiceStatusRequiresApproval;
+    BOOL succeeded = turningOff ? [service unregisterAndReturnError:&error] : [service registerAndReturnError:&error];
+    if (!succeeded) {
+        [self showAlert:@"Couldn’t update Launch at Login" message:error.localizedDescription ?: @"Try again from System Settings → General → Login Items."];
+    }
 }
 
 - (void)showAlert:(NSString *)title message:(NSString *)message {
@@ -202,7 +303,7 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
 
 @implementation QRPanelController
 
-- (instancetype)initWithImage:(NSImage *)image byteCount:(NSUInteger)byteCount title:(NSString *)titleText {
+- (instancetype)initWithImage:(NSImage *)image payloadBytes:(NSUInteger)payloadBytes sourceBytes:(NSUInteger)sourceBytes title:(NSString *)titleText {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 620, 680)
                                                   styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskFullSizeContentView
                                                     backing:NSBackingStoreBuffered
@@ -217,12 +318,12 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
         window.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary;
         window.delegate = self;
         [window center];
-        [self buildContentWithImage:image byteCount:byteCount title:titleText];
+        [self buildContentWithImage:image payloadBytes:payloadBytes sourceBytes:sourceBytes title:titleText];
     }
     return self;
 }
 
-- (void)buildContentWithImage:(NSImage *)image byteCount:(NSUInteger)byteCount title:(NSString *)titleText {
+- (void)buildContentWithImage:(NSImage *)image payloadBytes:(NSUInteger)payloadBytes sourceBytes:(NSUInteger)sourceBytes title:(NSString *)titleText {
     NSView *content = self.window.contentView;
     NSImageView *imageView = [[NSImageView alloc] init];
     imageView.image = image;
@@ -234,7 +335,9 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
     title.font = [NSFont systemFontOfSize:22 weight:NSFontWeightSemibold];
     title.alignment = NSTextAlignmentCenter;
 
-    NSTextField *detail = [NSTextField labelWithString:[NSString stringWithFormat:@"%lu text bytes • Press Esc to close", (unsigned long)byteCount]];
+    NSUInteger percent = (NSUInteger)ceil((double)payloadBytes * 100.0 / (double)CopyQRMaximumPayloadBytes);
+    NSTextField *detail = [NSTextField labelWithString:[NSString stringWithFormat:@"%lu / 2,900 QR bytes • %lu%% used • %lu text bytes",
+                                                        (unsigned long)payloadBytes, (unsigned long)percent, (unsigned long)sourceBytes]];
     detail.font = [NSFont systemFontOfSize:13];
     detail.textColor = NSColor.secondaryLabelColor;
     detail.alignment = NSTextAlignmentCenter;
