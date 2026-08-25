@@ -24,8 +24,39 @@ static const UInt32 CopyQRHotKeyID = 1;
 @property (nonatomic) EventHotKeyRef hotKeyRef;
 @property (nonatomic) EventHandlerRef eventHandler;
 - (void)showClipboardAsQR;
-- (void)captureSelectionAndShowQR;
+- (void)captureSelectionAndShowQRFromPID:(pid_t)sourcePID;
 @end
+
+static NSString *CopyQRSelectedTextForElement(AXUIElementRef element) {
+    if (!element) return nil;
+    CFTypeRef selected = NULL;
+    AXError error = AXUIElementCopyAttributeValue(element, kAXSelectedTextAttribute, &selected);
+    NSString *text = nil;
+    if (error == kAXErrorSuccess && selected && CFGetTypeID(selected) == CFStringGetTypeID()) {
+        text = [(__bridge NSString *)selected copy];
+    }
+    if (selected) CFRelease(selected);
+    return text.length ? text : nil;
+}
+
+static NSString *CopyQRSelectedTextInAncestors(AXUIElementRef start) {
+    if (!start) return nil;
+    AXUIElementRef current = (AXUIElementRef)CFRetain(start);
+    for (NSUInteger depth = 0; current && depth < 12; depth++) {
+        NSString *text = CopyQRSelectedTextForElement(current);
+        if (text.length) {
+            CFRelease(current);
+            return text;
+        }
+        CFTypeRef parent = NULL;
+        AXUIElementCopyAttributeValue(current, kAXParentAttribute, &parent);
+        CFRelease(current);
+        current = parent && CFGetTypeID(parent) == AXUIElementGetTypeID() ? (AXUIElementRef)parent : NULL;
+        if (parent && !current) CFRelease(parent);
+    }
+    if (current) CFRelease(current);
+    return nil;
+}
 
 static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, void *userData) {
     EventHotKeyID pressed = {0};
@@ -33,7 +64,8 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
                                         NULL, sizeof(pressed), NULL, &pressed);
     if (status == noErr && pressed.signature == CopyQRHotKeySignature && pressed.id == CopyQRHotKeyID) {
         AppDelegate *delegate = (__bridge AppDelegate *)userData;
-        dispatch_async(dispatch_get_main_queue(), ^{ [delegate captureSelectionAndShowQR]; });
+        pid_t sourcePID = NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
+        dispatch_async(dispatch_get_main_queue(), ^{ [delegate captureSelectionAndShowQRFromPID:sourcePID]; });
     }
     return noErr;
 }
@@ -108,87 +140,38 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
     }
 }
 
-- (void)captureSelectionAndShowQR {
+- (void)captureSelectionAndShowQRFromPID:(pid_t)sourcePID {
     NSDictionary *options = @{(__bridge NSString *)kAXTrustedCheckOptionPrompt: @YES};
     if (!AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)options)) {
         [self showAccessibilityHelp];
         return;
     }
 
-    AXUIElementRef system = AXUIElementCreateSystemWide();
+    AXUIElementRef application = sourcePID > 0 ? AXUIElementCreateApplication(sourcePID) : NULL;
     CFTypeRef focused = NULL;
-    AXError focusedError = AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute, &focused);
-    CFRelease(system);
+    if (application) AXUIElementCopyAttributeValue(application, kAXFocusedUIElementAttribute, &focused);
 
-    CFTypeRef selected = NULL;
-    AXError selectedError = focusedError == kAXErrorSuccess && focused
-        ? AXUIElementCopyAttributeValue((AXUIElementRef)focused, kAXSelectedTextAttribute, &selected)
-        : kAXErrorFailure;
-    if (focused) CFRelease(focused);
+    NSString *text = focused && CFGetTypeID(focused) == AXUIElementGetTypeID()
+        ? CopyQRSelectedTextInAncestors((AXUIElementRef)focused)
+        : nil;
 
-    NSString *text = nil;
-    if (selectedError == kAXErrorSuccess && selected && CFGetTypeID(selected) == CFStringGetTypeID()) {
-        text = [(__bridge NSString *)selected copy];
+    if (text.length == 0 && application) {
+        CFTypeRef window = NULL;
+        AXUIElementCopyAttributeValue(application, kAXFocusedWindowAttribute, &window);
+        if (window && CFGetTypeID(window) == AXUIElementGetTypeID()) {
+            text = CopyQRSelectedTextForElement((AXUIElementRef)window);
+        }
+        if (window) CFRelease(window);
     }
-    if (selected) CFRelease(selected);
-
-    if (text.length == 0) text = [self copySelectionAndRestoreClipboard];
+    if (focused) CFRelease(focused);
+    if (application) CFRelease(application);
 
     if (text.length == 0) {
         [self showAlert:@"No text selected"
-                message:@"Select some text, then press ⌃Q. CopyQR tried both direct selection access and the browser-compatible copy fallback."];
+                message:@"Select some text, then press ⌃Q. CopyQR reads only the selection exposed by the foreground app and never touches your clipboard."];
         return;
     }
     [self showTextAsQR:text];
-}
-
-- (NSArray<NSDictionary<NSPasteboardType, NSData *> *> *)clipboardSnapshot:(NSPasteboard *)pasteboard {
-    NSMutableArray *snapshot = [NSMutableArray array];
-    for (NSPasteboardItem *item in pasteboard.pasteboardItems ?: @[]) {
-        NSMutableDictionary *contents = [NSMutableDictionary dictionary];
-        for (NSPasteboardType type in item.types) {
-            NSData *data = [item dataForType:type];
-            if (data) contents[type] = data;
-        }
-        [snapshot addObject:contents];
-    }
-    return snapshot;
-}
-
-- (void)restoreClipboard:(NSArray<NSDictionary<NSPasteboardType, NSData *> *> *)snapshot
-              pasteboard:(NSPasteboard *)pasteboard {
-    NSMutableArray<NSPasteboardItem *> *items = [NSMutableArray array];
-    for (NSDictionary<NSPasteboardType, NSData *> *contents in snapshot) {
-        NSPasteboardItem *item = [[NSPasteboardItem alloc] init];
-        for (NSPasteboardType type in contents) [item setData:contents[type] forType:type];
-        [items addObject:item];
-    }
-    [pasteboard clearContents];
-    if (items.count) [pasteboard writeObjects:items];
-}
-
-- (NSString *)copySelectionAndRestoreClipboard {
-    NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
-    NSArray *snapshot = [self clipboardSnapshot:pasteboard];
-    NSInteger previousChangeCount = pasteboard.changeCount;
-
-    CGEventRef keyDown = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)kVK_ANSI_C, true);
-    CGEventRef keyUp = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)kVK_ANSI_C, false);
-    CGEventSetFlags(keyDown, kCGEventFlagMaskCommand);
-    CGEventSetFlags(keyUp, kCGEventFlagMaskCommand);
-    CGEventPost(kCGHIDEventTap, keyDown);
-    CGEventPost(kCGHIDEventTap, keyUp);
-    CFRelease(keyDown);
-    CFRelease(keyUp);
-
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:0.6];
-    while (pasteboard.changeCount == previousChangeCount && deadline.timeIntervalSinceNow > 0) {
-        [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.015]];
-    }
-
-    NSString *text = [pasteboard stringForType:NSPasteboardTypeString];
-    [self restoreClipboard:snapshot pasteboard:pasteboard];
-    return text;
 }
 
 - (NSData *)rawDeflateData:(NSData *)input strategy:(int)strategy {

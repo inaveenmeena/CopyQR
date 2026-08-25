@@ -13,7 +13,7 @@ See [FUNCTIONALITY.md](FUNCTIONALITY.md) for the complete v1 feature set, permis
 
 Accessibility permission lets CopyQR read the text you actively select when its global shortcut is pressed. You can also copy text normally, click the QR icon in the macOS menu bar, and choose **Show Clipboard as QR**.
 
-When a browser does not expose its selection directly, CopyQR briefly invokes Copy, reads the selected text, and restores the previous clipboard contents and formats automatically.
+CopyQR reads the selection directly from the foreground app and never changes the clipboard, so clipboard managers such as Maccy do not record CopyQR activity.
 
 The menu shows whether Accessibility and the global shortcut are ready, opens the correct Settings page when permission is missing, and offers an optional **Launch at Login** toggle.
 
