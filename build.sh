@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="${0:A:h}"
 APP_DIR="$ROOT_DIR/dist/CopyQR.app"
+ZIP_PATH="$ROOT_DIR/dist/CopyQR-macOS.zip"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 
@@ -21,4 +22,6 @@ clang \
   -o "$MACOS_DIR/CopyQR"
 
 codesign --force --deep --sign - "$APP_DIR"
+ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$ZIP_PATH"
 echo "$APP_DIR"
+echo "$ZIP_PATH"

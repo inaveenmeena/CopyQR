@@ -3,7 +3,7 @@
 ## 1.0.2
 
 - Replace Accessibility-based selection capture with a native macOS Service.
-- Preserve Shift-Command-Q as the service keyboard shortcut.
+- Use Shift-Command-R as the service keyboard shortcut, avoiding macOS's reserved Log Out shortcut.
 - Add **Show Selection as QR** to the macOS Services/right-click menu.
 - Stop requesting Accessibility permission across app updates.
 - Update the receiver and repository identity from `inaveengehlot` to `inaveenmeena`.

@@ -36,7 +36,7 @@ static NSString *const CopyQRReceiverURL = @"https://inaveenmeena.github.io/Copy
     show.target = self;
     [menu addItem:show];
     [menu addItem:[NSMenuItem separatorItem]];
-    NSMenuItem *shortcut = [[NSMenuItem alloc] initWithTitle:@"Shortcut: ⇧⌘Q" action:nil keyEquivalent:@""];
+    NSMenuItem *shortcut = [[NSMenuItem alloc] initWithTitle:@"Shortcut: ⇧⌘R" action:nil keyEquivalent:@""];
     shortcut.enabled = NO;
     [menu addItem:shortcut];
     [menu addItem:[NSMenuItem separatorItem]];
