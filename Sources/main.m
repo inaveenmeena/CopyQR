@@ -1,11 +1,7 @@
 #import <AppKit/AppKit.h>
-#import <ApplicationServices/ApplicationServices.h>
-#import <Carbon/Carbon.h>
 #import <CoreImage/CoreImage.h>
 
-static const OSType CopyQRHotKeySignature = 'CQR!';
-static const UInt32 CopyQRHotKeyID = 1;
-static NSString *const CopyQRReceiverURL = @"https://inaveengehlot.github.io/CopyQR/";
+static NSString *const CopyQRReceiverURL = @"https://inaveenmeena.github.io/CopyQR/";
 
 @interface QRPanelController : NSWindowController <NSWindowDelegate>
 @property (nonatomic, copy) void (^onClose)(void);
@@ -15,35 +11,23 @@ static NSString *const CopyQRReceiverURL = @"https://inaveengehlot.github.io/Cop
 @interface AppDelegate : NSObject <NSApplicationDelegate>
 @property (nonatomic, strong) NSStatusItem *statusItem;
 @property (nonatomic, strong) QRPanelController *panel;
-@property (nonatomic) EventHotKeyRef hotKeyRef;
-@property (nonatomic) EventHandlerRef eventHandler;
 - (void)showClipboardAsQR;
-- (void)captureSelectionAndShowQR;
+- (void)showSelectionAsQR:(NSPasteboard *)pasteboard userData:(NSString *)userData error:(NSString **)error;
 @end
-
-static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, void *userData) {
-    EventHotKeyID pressed = {0};
-    OSStatus status = GetEventParameter(event, kEventParamDirectObject, typeEventHotKeyID,
-                                        NULL, sizeof(pressed), NULL, &pressed);
-    if (status == noErr && pressed.signature == CopyQRHotKeySignature && pressed.id == CopyQRHotKeyID) {
-        AppDelegate *delegate = (__bridge AppDelegate *)userData;
-        dispatch_async(dispatch_get_main_queue(), ^{ [delegate captureSelectionAndShowQR]; });
-    }
-    return noErr;
-}
 
 @implementation AppDelegate
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [self configureStatusItem];
-    [self registerHotKey];
+    [NSApp setServicesProvider:self];
+    NSUpdateDynamicServices();
 }
 
 - (void)configureStatusItem {
     self.statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSSquareStatusItemLength];
     self.statusItem.button.image = [NSImage imageWithSystemSymbolName:@"qrcode" accessibilityDescription:@"CopyQR"];
-    self.statusItem.button.toolTip = @"Copy clipboard text to QR";
+    self.statusItem.button.toolTip = @"Selected text to QR";
 
     NSMenu *menu = [[NSMenu alloc] init];
     NSMenuItem *show = [[NSMenuItem alloc] initWithTitle:@"Show Clipboard as QR"
@@ -62,46 +46,13 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
     self.statusItem.menu = menu;
 }
 
-- (void)registerHotKey {
-    EventTypeSpec type = { kEventClassKeyboard, kEventHotKeyPressed };
-    InstallEventHandler(GetApplicationEventTarget(), CopyQRHotKeyHandler, 1, &type,
-                        (__bridge void *)self, &_eventHandler);
-    EventHotKeyID identifier = { CopyQRHotKeySignature, CopyQRHotKeyID };
-    RegisterEventHotKey(kVK_ANSI_Q, cmdKey | shiftKey, identifier,
-                        GetApplicationEventTarget(), 0, &_hotKeyRef);
-}
-
-- (void)captureSelectionAndShowQR {
-    NSDictionary *options = @{(__bridge NSString *)kAXTrustedCheckOptionPrompt: @YES};
-    if (!AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)options)) {
-        [self showAlert:@"Allow Accessibility access"
-                message:@"CopyQR needs one-time permission to read your selected text. Enable CopyQR in System Settings → Privacy & Security → Accessibility, then try the shortcut again."];
-        return;
-    }
-
-    AXUIElementRef system = AXUIElementCreateSystemWide();
-    CFTypeRef focused = NULL;
-    AXError focusedError = AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute, &focused);
-    CFRelease(system);
-
-    CFTypeRef selected = NULL;
-    AXError selectedError = focusedError == kAXErrorSuccess && focused
-        ? AXUIElementCopyAttributeValue((AXUIElementRef)focused, kAXSelectedTextAttribute, &selected)
-        : kAXErrorFailure;
-    if (focused) CFRelease(focused);
-
-    NSString *text = nil;
-    if (selectedError == kAXErrorSuccess && selected && CFGetTypeID(selected) == CFStringGetTypeID()) {
-        text = [(__bridge NSString *)selected copy];
-    }
-    if (selected) CFRelease(selected);
-
+- (void)showSelectionAsQR:(NSPasteboard *)pasteboard userData:(NSString *)userData error:(NSString **)error {
+    NSString *text = [pasteboard stringForType:NSPasteboardTypeString];
     if (text.length == 0) {
-        [self showAlert:@"No text selected"
-                message:@"Select some text, then press ⇧⌘Q. If an app doesn’t expose its selection to macOS, use CopyQR’s clipboard menu option."];
+        if (error) *error = @"CopyQR couldn’t read the selected text.";
         return;
     }
-    [self showTextAsQR:text];
+    dispatch_async(dispatch_get_main_queue(), ^{ [self showTextAsQR:text]; });
 }
 
 - (NSImage *)qrImageForData:(NSData *)data {
@@ -152,7 +103,7 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
     NSData *payload = [qrContent dataUsingEncoding:NSUTF8StringEncoding];
     if (payload.length > 2900) {
         [self showAlert:@"Text is too large"
-                message:[NSString stringWithFormat:@"This text needs %lu QR bytes after secure URL encoding. CopyQR v1.0.1 supports up to 2,900. Try a shorter selection.", (unsigned long)payload.length]];
+                message:[NSString stringWithFormat:@"This text needs %lu QR bytes after URL encoding. CopyQR v1.0.2 supports up to 2,900, which is at most 2,143 UTF-8 text bytes. Try a shorter selection.", (unsigned long)payload.length]];
         return;
     }
 
@@ -189,10 +140,6 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
 
 - (void)quitApp { [NSApp terminate:nil]; }
 
-- (void)applicationWillTerminate:(NSNotification *)notification {
-    if (self.hotKeyRef) UnregisterEventHotKey(self.hotKeyRef);
-    if (self.eventHandler) RemoveEventHandler(self.eventHandler);
-}
 @end
 
 @implementation QRPanelController

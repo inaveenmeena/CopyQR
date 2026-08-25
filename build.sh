@@ -15,8 +15,6 @@ clang \
   -fblocks \
   -mmacosx-version-min=13.0 \
   -framework AppKit \
-  -framework ApplicationServices \
-  -framework Carbon \
   -framework CoreImage \
   -framework QuartzCore \
   "$ROOT_DIR/Sources/main.m" \

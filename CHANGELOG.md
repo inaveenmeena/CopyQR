@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.2
+
+- Replace Accessibility-based selection capture with a native macOS Service.
+- Preserve Shift-Command-Q as the service keyboard shortcut.
+- Add **Show Selection as QR** to the macOS Services/right-click menu.
+- Stop requesting Accessibility permission across app updates.
+- Update the receiver and repository identity from `inaveengehlot` to `inaveenmeena`.
+- Add a **Designed by Naveen Meena · @inaveenmeena** credit to the receiver.
+- Document the exact single-QR text capacity.
+
 ## 1.0.1
 
 - Detect web links and keep their native open-on-scan behavior.

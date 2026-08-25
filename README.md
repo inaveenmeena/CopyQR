@@ -1,4 +1,4 @@
-# CopyQR v1.0.1
+# CopyQR v1.0.2
 
 A tiny, native macOS menu-bar app that turns selected text into a QR code. Web links open directly; ordinary text opens a private, one-tap Copy page on your phone.
 
@@ -8,15 +8,14 @@ See [FUNCTIONALITY.md](FUNCTIONALITY.md) for the complete v1 feature set, permis
 
 1. Open `dist/CopyQR.app`.
 2. Select text in any app.
-3. Press **Shift-Command-Q**.
-4. The first time, allow CopyQR under **System Settings → Privacy & Security → Accessibility**.
-5. Scan the QR code with your phone. For ordinary text, tap **Copy text** on the receiver page.
+3. Press **Shift-Command-Q**, or right-click and choose **Services → Show Selection as QR**.
+4. Scan the QR code with your phone. For ordinary text, tap **Copy text** on the receiver page.
 
-You can also copy text normally, click the QR icon in the macOS menu bar, and choose **Show Clipboard as QR**. That menu action does not require Accessibility permission.
+CopyQR uses the native macOS Services system and does not require Accessibility permission. You can also copy text normally, click the QR icon in the macOS menu bar, and choose **Show Clipboard as QR**.
 
 CopyQR has no analytics and never uploads selected text. Ordinary text is encoded after `#` in the receiver URL; URL fragments are not sent in HTTP requests. The static receiver contains no accounts, storage, cookies, or third-party scripts.
 
-The encoded receiver URL must still fit in one QR code. Base64URL encoding adds some overhead, so ordinary text selections of roughly 2 KB or less are the practical v1.0.1 range. For the most reliable phone scanning, shorter text works best.
+The encoded receiver URL must still fit in one QR code. v1.0.2 accepts at most **2,143 UTF-8 text bytes** for ordinary text. That is roughly 350 English words, or commonly 2–5 medium paragraphs. Non-Latin scripts and emoji use more bytes, so their character capacity is lower. For the most reliable phone scanning, shorter text works best.
 
 ## Build
 

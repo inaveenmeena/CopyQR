@@ -89,6 +89,10 @@ kbd { display: inline-grid; min-width: 27px; height: 27px; margin: 0 2px; place-
 
 footer { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 9px; margin-top: 38px; color: #8c928c; font-size: 11px; font-weight: 650; letter-spacing: .03em; }
 footer i { width: 3px; height: 3px; border-radius: 50%; background: #b9bcb7; }
+.credit { margin: 11px 0 0; text-align: center; color: #9a9e98; font-size: 11px; }
+.credit a { color: #666d67; font-weight: 700; text-decoration: none; }
+.credit a span { color: var(--green); }
+.credit a:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; border-radius: 3px; }
 
 @media (max-width: 520px) {
   .shell { padding-left: 0; padding-right: 0; padding-bottom: 0; align-items: end; }
