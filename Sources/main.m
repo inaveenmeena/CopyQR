@@ -5,10 +5,20 @@
 #import <ServiceManagement/ServiceManagement.h>
 #include <zlib.h>
 
-static NSString *const CopyQRReceiverURL = @"https://inaveenmeena.github.io/CopyQR/";
 static const NSUInteger CopyQRMaximumPayloadBytes = 2900;
 static const OSType CopyQRHotKeySignature = 'CQR!';
 static const UInt32 CopyQRHotKeyID = 1;
+
+static NSString *CopyQROfflineReceiverPrefix(void) {
+    static NSString *prefix;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSString *page = @"<meta name=viewport content='width=device-width'><style>body{font:17px system-ui;background:ghostwhite;color:midnightblue;margin:40px}button{font:inherit;background:midnightblue;color:white;border:0;border-radius:14px;padding:15px 28px}pre{white-space:pre-wrap;word-break:break-word}</style><h2>CopyQR Offline</h2><button id=b>Copy text</button><pre id=p></pre><script>let t,p=document.getElementById('p'),b=document.getElementById('b');async function x(){let h=location.hash.slice(1),v=h.slice(0,2),s=h.slice(2).replace(/-/g,'+').replace(/_/g,'/');s+='==='.slice((s.length+3)%4);let a=Uint8Array.from(atob(s),c=>c.charCodeAt());if(v=='2.')a=new Uint8Array(await new Response(new Blob([a]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());t=new TextDecoder().decode(a);p.textContent=t}b.onclick=()=>{let a=document.createElement('textarea');a.value=t;document.body.append(a);a.select();document.execCommand('copy');a.remove();b.textContent='Copied'};x()</script>";
+        NSData *pageData = [page dataUsingEncoding:NSUTF8StringEncoding];
+        prefix = [@"data:text/html;base64," stringByAppendingString:[pageData base64EncodedStringWithOptions:0]];
+    });
+    return prefix;
+}
 
 static NSString *CopyQRSelectedTextFromElement(AXUIElementRef element) {
     if (!element) return nil;
@@ -386,11 +396,12 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
         qrContent = trimmed;
     } else {
         NSData *textData = [text dataUsingEncoding:NSUTF8StringEncoding];
-        NSString *plainURL = [NSString stringWithFormat:@"%@#v1.%@", CopyQRReceiverURL,
+        NSString *receiver = CopyQROfflineReceiverPrefix();
+        NSString *plainURL = [NSString stringWithFormat:@"%@#1.%@", receiver,
                               [self base64URLStringForData:textData]];
         NSData *compressed = [self smallestCompressedData:textData];
         NSString *compressedURL = compressed
-            ? [NSString stringWithFormat:@"%@#v2.%@", CopyQRReceiverURL,
+            ? [NSString stringWithFormat:@"%@#2.%@", receiver,
                [self base64URLStringForData:compressed]]
             : nil;
         qrContent = compressedURL.length < plainURL.length ? compressedURL : plainURL;
@@ -418,7 +429,7 @@ static OSStatus CopyQRHotKeyHandler(EventHandlerCallRef next, EventRef event, vo
     QRPanelController *controller = [[QRPanelController alloc] initWithImage:image
                                                                 payloadBytes:payload.length
                                                                  sourceBytes:sourceBytes
-                                                                       title:isWebLink ? @"Scan to open" : @"Scan to copy"];
+                                                                       title:isWebLink ? @"Scan to open" : @"Scan for offline copy"];
     self.panel = controller;
     __weak typeof(self) weakSelf = self;
     __weak QRPanelController *weakController = controller;

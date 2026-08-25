@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="${0:A:h}"
-APP_DIR="$ROOT_DIR/dist/CopyQR.app"
-ZIP_PATH="$ROOT_DIR/dist/CopyQR-macOS.zip"
+APP_DIR="$ROOT_DIR/dist/CopyQR-1.0.3e.app"
+ZIP_PATH="$ROOT_DIR/dist/CopyQR-1.0.3e-macOS.zip"
 SIGNING_IDENTITY="${COPYQR_SIGNING_IDENTITY:-CopyQR Local Release}"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"

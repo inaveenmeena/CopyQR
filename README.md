@@ -1,4 +1,8 @@
-# CopyQR v1.0.3
+# CopyQR v1.0.3e — offline experiment
+
+This experimental branch replaces the hosted receiver for ordinary text with a complete miniature `data:text/html` page inside every QR. It is intended to test whether iPhone Camera will open the `data:` URL and allow its **Copy text** button to use the clipboard without any internet connection. Ordinary web links still open directly.
+
+The stable v1.0.3 release remains on the `main` branch.
 
 A tiny, native macOS menu-bar app that turns selected text into a QR code. Web links open directly; ordinary text opens a private, one-tap Copy page on your phone.
 

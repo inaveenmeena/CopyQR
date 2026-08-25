@@ -1,5 +1,6 @@
 .DS_Store
 dist/.DS_Store
 dist/CopyQR.app/
+dist/CopyQR-1.0.3e.app/
 *.xcuserstate
 DerivedData/

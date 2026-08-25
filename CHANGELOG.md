@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.3e experimental
+
+- Embed the complete receiver HTML, styling, decoder, decompressor, selected text, and Copy button in the QR itself.
+- Remove the network and cached-page requirement for ordinary text.
+- Keep ordinary HTTP and HTTPS links opening directly.
+- Build as a separate `CopyQR-1.0.3e.app` and ZIP so the stable app remains available.
+- Accept lower text capacity because every QR also carries the offline receiver code.
+
 ## v1.0.3 selection hotfix
 
 - Remember the last active non-CopyQR application so opening the QR panel cannot make CopyQR read its own (empty) selection.

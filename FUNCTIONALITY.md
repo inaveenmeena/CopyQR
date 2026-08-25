@@ -1,4 +1,4 @@
-# CopyQR v1.0.3 functionality
+# CopyQR v1.0.3e experimental functionality
 
 CopyQR v1 is a small, native macOS menu-bar utility for moving selected text from a Mac to a phone through a QR code.
 
@@ -8,8 +8,8 @@ CopyQR v1 is a small, native macOS menu-bar utility for moving selected text fro
 2. Press **Control-Q**.
 3. CopyQR reads the active selection using the one-time macOS Accessibility permission.
 4. CopyQR detects whether it is a web link or ordinary text.
-5. Web links are encoded directly. Ordinary text uses whichever is smaller: plain UTF-8 or maximum-level raw DEFLATE, Base64URL-encoded inside the fragment of the CopyQR receiver URL.
-6. Scan the QR code using a phone camera. For ordinary text, tap **Copy text** on the receiver page.
+5. Web links are encoded directly. For ordinary text, CopyQR embeds a miniature self-contained HTML receiver plus the smaller of plain UTF-8 or maximum-level raw DEFLATE data.
+6. Scan the QR code using a phone camera. If iOS accepts the experimental `data:` URL, tap **Copy text** on the entirely offline page.
 
 ## Included functionality
 
@@ -30,12 +30,9 @@ CopyQR v1 is a small, native macOS menu-bar utility for moving selected text fro
 - Keeps the QR window above ordinary windows and available across Spaces.
 - Works entirely offline and includes no accounts, analytics, tracking, uploads, or third-party dependencies.
 - Keeps web links opening directly on scan.
-- Gives ordinary text a dedicated HTTPS receiver with one-tap copying on iPhone.
-- Keeps text inside the URL fragment, which is not sent to the receiver host in an HTTP request.
-- Removes the fragment from the visible browser URL after decoding.
+- Embeds the receiver page and selected text together in a self-contained `data:text/html` URL, with no web host involved.
 - Supports QR payloads up to 2,900 bytes; source-text capacity varies with compressibility.
-- Uses a versioned, cross-platform payload format: `v1` is plain UTF-8 and `v2` is raw DEFLATE. Both are Base64URL encoded.
-- Gives clear animated confirmation after copying on the receiver and requests a short vibration on browsers that support web haptics. iPhone Safari currently provides visual confirmation only because WebKit does not expose custom device vibration.
+- Uses an experimental payload format: `1.` is plain UTF-8 and `2.` is raw DEFLATE. Both are Base64URL encoded after the self-contained page fragment.
 - Provides a native Apple-silicon macOS application bundle.
 
 ## Permissions
@@ -49,7 +46,9 @@ The universal fallback performs a normal copy. Clipboard managers such as Maccy 
 - Only one QR frame is supported; oversized text is rejected.
 - The included binary is built for Apple-silicon Macs.
 - The app uses a stable self-signed release identity but is not Apple-notarized, so public downloads still require the user to approve opening an unidentified developer app.
-- Compressed `v2` receiver links require a browser with raw-DEFLATE Compression Streams support (Safari/iOS 16.4 or newer, or a comparable modern browser).
+- Compressed `2.` payloads require a browser with raw-DEFLATE Compression Streams support (Safari/iOS 16.4 or newer, or a comparable modern browser).
+- iPhone Camera may refuse to open `data:` URLs or Safari may restrict clipboard operations for opaque-origin pages; v1.0.3e exists specifically to test this behavior.
+- Embedding the receiver code reduces the amount of selected text that fits in one QR compared with stable v1.0.3.
 
 ## Planned direction
 
